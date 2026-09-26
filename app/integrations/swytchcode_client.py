@@ -744,6 +744,30 @@ class SwytchcodeClient:
 
         try:
             result = self._swx.tools.execute(TOOL_GITHUB_PULL_CREATE, args)
+            # Check if Swytchcode returned an API error response in result or data dict
+            is_api_err = False
+            err_text = ""
+            inner_data = {}
+            if isinstance(result, dict):
+                inner_data = result.get("data", {})
+                status_code = result.get("status_code")
+                data_status = inner_data.get("status") if isinstance(inner_data, dict) else None
+                if status_code in (400, 403, 404, 422) or data_status in (400, 403, 404, 422, "400", "403", "404", "422"):
+                    is_api_err = True
+                    err_text = str(result)
+                elif "error" in result:
+                    is_api_err = True
+                    err_text = str(result.get("error"))
+
+            if is_api_err:
+                if "already exists" in err_text.lower() or "validation failed" in err_text.lower():
+                    existing = self._find_existing_pull_request(owner, repo, head)
+                    if existing:
+                        logger.info(f"[TOOL] Reusing existing Pull Request #{existing.get('number')} for branch {head}")
+                        return existing
+                err_msg = inner_data.get("message", err_text) if isinstance(inner_data, dict) else err_text
+                raise RuntimeError(f"Swytchcode GitHub PR creation error: {err_msg}")
+
             data = result.get("data", result) if isinstance(result, dict) else result
             if isinstance(data, dict):
                 pr_num = data.get("number") or result.get("number")
@@ -763,7 +787,70 @@ class SwytchcodeClient:
         except Exception as e:
             err_msg = str(e)
             logger.error(f"[TOOL] Swytchcode GitHub PR creation failed: {err_msg}")
+            if "already exists" in err_msg.lower() or "validation failed" in err_msg.lower():
+                existing = self._find_existing_pull_request(owner, repo, head)
+                if existing:
+                    logger.info(f"[TOOL] Reusing existing Pull Request #{existing.get('number')} for branch {head}")
+                    return existing
             raise RuntimeError(f"Swytchcode GitHub PR creation error: {err_msg}")
+
+    def _find_existing_pull_request(self, owner: str, repo: str, head: str) -> Optional[dict[str, Any]]:
+        """Look up existing open pull request for head branch."""
+        import urllib.request as _req
+        import urllib.error as _uerr
+
+        token = os.getenv("GITHUB_TOKEN")
+        clean_head = head.split(":")[-1]
+        head_filter = f"{owner}:{clean_head}"
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls?head={head_filter}&state=open"
+        req = _req.Request(url)
+        req.add_header("User-Agent", "DevPilot-Agent/1.0")
+        req.add_header("Accept", "application/vnd.github+json")
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with _req.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if isinstance(data, list) and data:
+                    pr = data[0]
+                    return {
+                        "number": pr.get("number"),
+                        "html_url": pr.get("html_url"),
+                        "title": pr.get("title"),
+                        "state": pr.get("state", "open"),
+                        "head": {"ref": clean_head},
+                        "base": {"ref": pr.get("base", {}).get("ref", "main")},
+                        "data": pr,
+                    }
+        except Exception as e:
+            logger.warning(f"Could not find existing PR via head filter for {head}: {e}")
+
+        # Fallback: scan recent open PRs directly
+        try:
+            url_all = f"https://api.github.com/repos/{owner}/{repo}/pulls?state=open&per_page=15"
+            req_all = _req.Request(url_all)
+            req_all.add_header("User-Agent", "DevPilot-Agent/1.0")
+            req_all.add_header("Accept", "application/vnd.github+json")
+            if token:
+                req_all.add_header("Authorization", f"Bearer {token}")
+            with _req.urlopen(req_all, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if isinstance(data, list):
+                    for pr in data:
+                        pr_head_ref = pr.get("head", {}).get("ref", "")
+                        if pr_head_ref in (clean_head, head):
+                            return {
+                                "number": pr.get("number"),
+                                "html_url": pr.get("html_url"),
+                                "title": pr.get("title"),
+                                "state": pr.get("state", "open"),
+                                "head": {"ref": pr_head_ref},
+                                "base": {"ref": pr.get("base", {}).get("ref", "main")},
+                                "data": pr,
+                            }
+        except Exception as e:
+            logger.warning(f"Could not list open PRs for {owner}/{repo}: {e}")
+        return None
 
     # =========================================================================
     # Jira Task Tracking Tools
@@ -844,6 +931,16 @@ class SwytchcodeClient:
 
         try:
             result = self._swx.tools.execute(TOOL_SLACK_POST_MESSAGE, args)
+            data = result.get("data", result) if isinstance(result, dict) else result
+            if isinstance(data, dict):
+                is_ok = data.get("ok", False)
+                if not is_ok:
+                    slack_err = data.get("error", "Unknown Slack error")
+                    raise RuntimeError(f"Slack API error: {slack_err}")
+                if isinstance(result, dict):
+                    result["delivered"] = True
+                    result["ok"] = True
+                    result["channel"] = channel
             logger.info(f"[TOOL] Slack notification delivered via Swytchcode to {channel}")
             return result
         except Exception as e:

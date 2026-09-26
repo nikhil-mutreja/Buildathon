@@ -393,10 +393,10 @@ st.markdown('<div class="request-title">Development Request</div>', unsafe_allow
 prompt_col1, prompt_col2, prompt_col3, prompt_col4 = st.columns(4)
 
 with prompt_col1:
-    if st.button("🛡️ Scan, Fix All Bugs & Open PR", use_container_width=True, key="q1"):
+    if st.button("🛡️ Scan, Fix, PR + Jira + Slack", use_container_width=True, key="q1"):
         st.session_state["user_prompt"] = (
-            f"Scan {public_repo_input} for all bugs, syntax errors, and defects, "
-            f"fix them, run tests, and open a pull request authored by @{github_username}."
+            f"Scan {public_repo_input} for all bugs, fix them, open a pull request authored by @{github_username}, "
+            f"update Jira, and notify Slack."
         )
         st.session_state["auto_trigger"] = True
 
@@ -426,7 +426,7 @@ with prompt_col4:
 
 default_prompt = st.session_state.get(
     "user_prompt",
-    f"Scan {public_repo_input} for all bugs, fix them, and create a pull request authored by @{github_username}.",
+    f"Scan {public_repo_input} for all bugs, fix them, open a pull request authored by @{github_username}, update Jira, and notify Slack.",
 )
 
 user_request = st.text_area(

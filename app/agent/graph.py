@@ -611,7 +611,13 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
                     err_reason = pr_res.get("message") or inner_data.get("message") or "No PR number returned"
 
             if is_error:
-                raise RuntimeError(err_reason)
+                if "already exists" in err_reason.lower() or "validation failed" in err_reason.lower():
+                    existing = client._find_existing_pull_request(owner, repo, branch_name)
+                    if existing:
+                        pr_res = existing
+                        is_error = False
+                if is_error:
+                    raise RuntimeError(err_reason)
 
             pr_num = pr_res.get("number") or pr_res.get("data", {}).get("number")
             pr_res["review_checklist"] = checklist_items
@@ -941,11 +947,9 @@ def route_after_run_tests(state: DevPilotState) -> str:
 
     if not can_proceed:
         logger.warning("[SAFETY GATE] Automated tests failed. Halting Git branch and PR operations.")
-        should_jira, _ = should_create_jira(intent, actionable)
-        if should_jira:
+        if intent.get("needs_jira", False):
             return "create_jira"
-        should_slack, _ = should_send_slack(intent, [], actionable, [])
-        if should_slack:
+        if intent.get("needs_slack", False):
             return "send_slack"
         return "synthesize_response"
 
