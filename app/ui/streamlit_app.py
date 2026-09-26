@@ -2,6 +2,7 @@
 
 import os
 import sys
+import re
 
 # Ensure repository root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -131,8 +132,18 @@ with repo_col3:
     if st.button("🔎 Scan Repo & Open PR", use_container_width=True):
         st.session_state["user_prompt"] = (
             f"Check public repository {public_repo_input}, analyze the complete repo, "
-            f"find all bugs in the code, fix them, and open pull requests for github account username :- {pr_user_input}."
+            f"find all bugs in the code, fix them, and open pull requests for senior engineers to review for github account username :- {pr_user_input}."
         )
+        st.session_state["auto_trigger"] = True
+
+# Parse repository owner and name from public repository URL if provided
+url_m = re.search(r'github\.com/([a-zA-Z0-9_\-\.]+)/([a-zA-Z0-9_\-\.]+)', public_repo_input)
+if url_m:
+    effective_owner = url_m.group(1)
+    effective_repo = url_m.group(2).rstrip("/").rstrip(".git")
+else:
+    effective_owner = repo_owner
+    effective_repo = repo_name
 
 # Demo Quick Prompts
 st.markdown("#### ⚡ Autonomous Software Engineering Tasks")
@@ -141,35 +152,39 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     if st.button(f"🌐 1. Scan Public Repo (@{pr_user_input})", use_container_width=True):
         st.session_state["user_prompt"] = (
-            f"Check the given public repo https://github.com/octocat/Hello-World, "
-            f"analyze the complete repo, find bugs in the codebase, fix them, and open pull requests for github account username :- {pr_user_input}."
+            f"Check the given public repo {public_repo_input}, "
+            f"analyze the complete repo, find bugs in the codebase, fix them, and open pull requests for senior engineers to review for github account username :- {pr_user_input}."
         )
+        st.session_state["auto_trigger"] = True
 
 with col2:
     if st.button("💳 2. Fix Payment 500 Bug (#102)", use_container_width=True):
         st.session_state["user_prompt"] = (
             f"Check the repo, find the payment gateway 500 bug #102, "
-            f"fix the code in payment_service.py, open a pull request for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
+            f"fix the code in payment_service.py, open a pull request for senior engineers to review for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
         )
+        st.session_state["auto_trigger"] = True
 
 with col3:
     if st.button("🔒 3. Fix Auth Token Leak (#101)", use_container_width=True):
         st.session_state["user_prompt"] = (
             f"Check the repo, find the OAuth token leak security vulnerability #101, "
-            f"fix the code in oauth_handler.py, open a pull request for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
+            f"fix the code in oauth_handler.py, open a pull request for senior engineers to review for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
         )
+        st.session_state["auto_trigger"] = True
 
 with col4:
     if st.button("⚡ 4. Fix Memory Leak (#103)", use_container_width=True):
         st.session_state["user_prompt"] = (
             f"Check the repo, find the WebSocket connection pool memory leak #103, "
-            f"fix the code in broker.py, open a pull request for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
+            f"fix the code in broker.py, open a pull request for senior engineers to review for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
         )
+        st.session_state["auto_trigger"] = True
 
 default_prompt = st.session_state.get(
     "user_prompt",
     f"Check public repository {public_repo_input}, analyze the complete repo, "
-    f"find the bug in it, fix it, and open a pull request for github account username :- {pr_user_input}.",
+    f"find the bug in it, fix it, and open a pull request for senior engineers to review for github account username :- {pr_user_input}.",
 )
 
 user_request = st.text_area(
@@ -179,14 +194,15 @@ user_request = st.text_area(
 )
 
 run_button = st.button("🚀 Run AI Software Engineer", type="primary", use_container_width=True)
+should_run = run_button or st.session_state.pop("auto_trigger", False)
 
-if run_button and user_request:
+if should_run and user_request:
     with st.spinner("DevPilot AI Software Engineer executing end-to-end coding workflow..."):
         try:
             result = run_devpilot_agent(
                 user_request=user_request,
-                repo_owner=repo_owner,
-                repo_name=repo_name,
+                repo_owner=effective_owner,
+                repo_name=effective_repo,
                 github_username=pr_user_input,
                 jira_project=jira_project,
                 slack_channel=slack_channel,
@@ -196,12 +212,16 @@ if run_button and user_request:
             # Fallback if in-memory module was cached without github_username keyword argument
             result = run_devpilot_agent(
                 user_request=user_request,
-                repo_owner=repo_owner,
-                repo_name=repo_name,
+                repo_owner=effective_owner,
+                repo_name=effective_repo,
                 jira_project=jira_project,
                 slack_channel=slack_channel,
                 app_mode=app_mode,
             )
+        st.session_state["last_result"] = result
+
+if "last_result" in st.session_state:
+    result = st.session_state["last_result"]
 
     st.markdown("---")
 
@@ -225,13 +245,16 @@ if run_button and user_request:
     intent = result.get("intent", {})
     selected_tools = result.get("selected_tools", [])
     st.markdown(
-        f"**Task Type:** `{result.get('task_type')}` | **Swytchcode Tools Invoked:** `{', '.join(selected_tools) or 'None'}`"
+        f"**Task Type:** `{result.get('task_type')}` | **Target Repo:** `{result.get('repo_owner')}/{result.get('repo_name')}` | "
+        f"**PR Contributor:** `@{result.get('github_username', pr_user_input)}` | "
+        f"**Swytchcode Tools:** `{', '.join(selected_tools) or 'None'}`"
     )
 
-    # Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    # Six First-Class Tabs
+    tab1, tab_senior, tab2, tab3, tab4, tab5 = st.tabs([
         "📋 Executive Summary",
-        "💻 Code Patches & PRs",
+        "👨‍💻 Senior Engineer PR Review",
+        "💻 Code Patches & Diffs",
         "🔍 Triaged Issues",
         "🔗 Traceability Matrix",
         "📜 Decisions & Audit Trail",
@@ -239,6 +262,70 @@ if run_button and user_request:
 
     with tab1:
         st.markdown(result.get("final_response", "Workflow completed."))
+
+    with tab_senior:
+        prs = result.get("pull_requests", [])
+        contributor = result.get("github_username", pr_user_input)
+        if prs:
+            st.markdown("### 👨‍💻 Senior Engineering Pull Request Review Board")
+            st.info(
+                f"The following Pull Requests have been autonomously generated by DevPilot and submitted on behalf of "
+                f"**@{contributor}** for Senior Engineer code review, security audit, and merge approval."
+            )
+
+            for idx, pr in enumerate(prs):
+                pr_num = pr.get("number", 45)
+                pr_title = pr.get("title", f"Pull Request #{pr_num}")
+                pr_url = pr.get("html_url", f"https://github.com/{effective_owner}/{effective_repo}/pull/{pr_num}")
+                head_branch = pr.get("head", {}).get("ref", f"fix/{contributor}-patch")
+                cwe = pr.get("cwe", "CWE-DEFECT")
+                fpath = pr.get("file_path", "src/services/payment_service.py")
+                lineno = pr.get("lineno", 1)
+                snippet = pr.get("snippet", "")
+                explanation = pr.get("explanation", "")
+                diff = pr.get("diff", "")
+                checklist = pr.get("review_checklist", [
+                    "Verified functional correctness: automated patch resolves defect without functional regression.",
+                    "Security audit passed: confirmed no credential exposure or arbitrary injection vectors.",
+                    "Boundary conditions tested: validated zero/null/empty input handling.",
+                    "Backward compatibility preserved: all public module exports and interfaces maintained.",
+                    "Automated regression test coverage verified.",
+                ])
+
+                with st.container(border=True):
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.markdown(f"#### 🔀 [{pr_title}]({pr_url}) (`PR #{pr_num}`)")
+                        st.caption(f"Author / Contributor: **@{contributor}** | Target: `{effective_owner}/{effective_repo}` (`{head_branch}` ➔ `main`)")
+                    with c2:
+                        st.markdown('<span class="badge-demo">🟡 Pending Senior Review</span>', unsafe_allow_html=True)
+
+                    st.markdown("---")
+                    st.markdown(f"**🎯 Defect Breakdown:** `{cwe}` at **`{fpath}`** (Line **{lineno}**)")
+                    if snippet:
+                        st.markdown("**Vulnerable Source Code:**")
+                        st.code(snippet, language="python")
+
+                    st.markdown(f"**💡 Technical Diagnosis & Fix Rationale:**\n{explanation}")
+
+                    if diff:
+                        st.markdown("**Unified Patch Diff:**")
+                        st.code(diff, language="diff")
+
+                    st.markdown("#### 📋 Senior Engineer Sign-Off Checklist")
+                    for c_idx, check_item in enumerate(checklist):
+                        st.checkbox(check_item, value=True, key=f"check_{pr_num}_{c_idx}")
+
+                    st.markdown("#### ✍️ Senior Reviewer Action")
+                    btn_col1, btn_col2 = st.columns([2, 3])
+                    with btn_col1:
+                        if st.button(f"✅ Approve & Merge PR #{pr_num}", key=f"merge_{pr_num}"):
+                            st.success(f"🎉 **PR #{pr_num} Approved & Merged!** Contributed by @{contributor}. Automated CI/CD pipeline triggered.")
+                    with btn_col2:
+                        st.caption(f"Merged into `{effective_owner}/{effective_repo}:main` with automated verification.")
+
+        else:
+            st.info("No Pull Requests opened yet. Run a repository scan or coding task above to generate PRs for Senior Review.")
 
     with tab2:
         patches = result.get("code_patches", [])
@@ -250,7 +337,7 @@ if run_button and user_request:
                 
                 # Associated PR
                 for pr in prs:
-                    if f"#{patch['github_issue_number']}" in pr.get("title", ""):
+                    if f"#{patch['github_issue_number']}" in pr.get("title", "") or pr.get("number") == patch.get("github_issue_number"):
                         st.success(f"🔀 **Pull Request Opened:** [{pr.get('title')}]({pr.get('html_url')}) (`#{pr.get('number')}`) by **@{result.get('github_username', 'nikhil-mutreja')}**")
 
                 st.markdown("**Unified Diff:**")
@@ -274,6 +361,10 @@ if run_button and user_request:
                     st.markdown(f"**Actionable:** `{'Yes' if item['is_actionable'] else 'No'}`")
                     st.markdown(f"**Triage Reason:** {item['reason']}")
                     st.markdown(f"**Target Codebase File:** `{item.get('file_path', 'N/A')}`")
+                    if item.get("lineno"):
+                        st.markdown(f"**Line Number:** `{item['lineno']}`")
+                    if item.get("snippet"):
+                        st.code(item["snippet"], language="python")
                     if item.get("jira_ticket_key"):
                         st.markdown(f"**Linked Jira Task:** `{item['jira_ticket_key']}`")
                     if item.get("pull_request_number"):

@@ -161,13 +161,16 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
                             "severity": defect["severity"],
                             "is_actionable": is_act,
                             "reason": defect["reason"],
+                            "cwe": defect.get("cwe"),
+                            "lineno": defect.get("lineno"),
+                            "snippet": defect.get("snippet"),
                             "jira_ticket_key": None,
                             "pull_request_number": None,
                         }
                         analyzed.append(defect_item)
                         if is_act:
                             actionable.append(defect_item)
-                            actions.append(f"Code scanner detected defect {defect['cwe']} in `{fpath}`.")
+                            actions.append(f"Code scanner detected defect {defect['cwe']} in `{fpath}` (line {defect.get('lineno', 1)}).")
                         scan_idx += 1
             except Exception as e:
                 logger.warning(f"Could not scan file {fpath}: {e}")
@@ -239,6 +242,13 @@ def generate_code_fix_node(state: DevPilotState) -> dict[str, Any]:
     for issue in actionable:
         issue_num = issue["number"]
         orig_code = file_map.get(issue_num, "")
+        if not issue.get("lineno") or not issue.get("snippet"):
+            detected = scan_code_for_defects(issue.get("file_path", ""), orig_code)
+            if detected:
+                issue["lineno"] = detected.get("lineno")
+                issue["snippet"] = detected.get("snippet")
+                if not issue.get("cwe"):
+                    issue["cwe"] = detected.get("cwe")
         patch_info = diagnose_and_generate_patch(issue, orig_code)
         patches.append(patch_info)
         decisions.append(
@@ -273,19 +283,36 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
         file_path = patch["file_path"]
         fixed_content = patch["fixed_code"]
         branch_name = f"fix/{github_user}-gh-{issue_num}-{os.path.basename(file_path).split('.')[0]}"
-        commit_msg = f"fix: resolve issue #{issue_num} in {file_path} by @{github_user}"
-        pr_title = f"[DevPilot Fix by @{github_user}] Resolve #{issue_num} in {file_path}"
+        commit_msg = f"fix: resolve {patch.get('cwe', 'defect')} in {file_path} by @{github_user}"
+        pr_title = f"[Senior Review Requested] Resolve #{issue_num}: Fix {patch.get('cwe', 'Bug')} in {os.path.basename(file_path)} (@{github_user})"
+
+        checklist_items = patch.get("review_checklist", [
+            "Functional correctness: automated patch resolves defect without functional regression.",
+            "Security audit: confirmed no credential exposure or arbitrary injection vectors.",
+            "Boundary conditions: validated zero/null/empty input handling.",
+            "Backward compatibility: all public module exports and interfaces maintained.",
+            "Automated regression tests verified.",
+        ])
+        checklist_md = "\n".join(f"- [ ] {item}" for item in checklist_items)
+
         pr_body = (
-            f"### Automated Pull Request by DevPilot AI Software Engineer\n\n"
-            f"**Author / Contributor:** @{github_user}\n"
-            f"**Target Repository:** `{owner}/{repo}`\n"
-            f"**Target Issue / Defect:** #{issue_num}\n"
-            f"**File Modified:** `{file_path}`\n\n"
-            f"#### Summary of Changes\n"
-            f"{patch['explanation']}\n\n"
-            f"#### Unified Diff\n"
+            f"### 🚀 Senior Engineer Review Request\n\n"
+            f"> **Submitted by:** @{github_user} via DevPilot Autonomous AI Software Engineer\n"
+            f"> **Target Repository:** `{owner}/{repo}` | **Branch:** `{branch_name}` → `main`\n"
+            f"> **Target Defect / Issue:** #{issue_num}\n"
+            f"> **Review Status:** 🟡 Pending Senior Engineer Approval\n\n"
+            f"#### 🔍 Defect Triage & Root Cause Analysis\n"
+            f"- **Classification / CWE:** `{patch.get('cwe', 'CWE-DEFECT')}`\n"
+            f"- **Target File:** `{file_path}` (Line **{patch.get('lineno', 1)}**)\n"
+            f"- **Vulnerable Code Snippet:**\n"
+            f"```python\n{patch.get('snippet', '')}\n```\n"
+            f"- **Technical Diagnosis & Solution:**\n{patch['explanation']}\n\n"
+            f"#### 🛠️ Unified Code Diff\n"
             f"```diff\n{patch['diff']}\n```\n\n"
-            f"---\n*Generated and submitted autonomously by DevPilot for @{github_user}*"
+            f"#### 📋 Senior Engineer Sign-Off Checklist\n"
+            f"{checklist_md}\n\n"
+            f"---\n"
+            f"*Generated autonomously by DevPilot AI Software Engineer for Senior Reviewers. Contributed by @{github_user}.*"
         )
 
         try:
@@ -309,6 +336,15 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
                 author=github_user,
             )
             pr_num = pr_res.get("number", 45)
+            pr_res["review_checklist"] = checklist_items
+            pr_res["cwe"] = patch.get("cwe")
+            pr_res["lineno"] = patch.get("lineno")
+            pr_res["snippet"] = patch.get("snippet")
+            pr_res["explanation"] = patch.get("explanation")
+            pr_res["diff"] = patch.get("diff")
+            pr_res["file_path"] = file_path
+            pr_res["author"] = github_user
+            pr_res["body"] = pr_body
             pull_requests.append(pr_res)
 
             # Link PR number to corresponding actionable issue
@@ -316,7 +352,7 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
                 if issue["number"] == issue_num:
                     issue["pull_request_number"] = pr_num
 
-            decisions.append(f"Pull request #{pr_num} opened by @{github_user} on branch `{branch_name}`.")
+            decisions.append(f"Pull request #{pr_num} opened by @{github_user} on branch `{branch_name}` for Senior Engineer review.")
             actions.append(f"Created GitHub Pull Request #{pr_num} by @{github_user}: '{pr_title}'.")
         except Exception as e:
             err_msg = f"Failed to create PR for #{issue_num}: {str(e)}"
@@ -467,6 +503,18 @@ def synthesize_response_node(state: DevPilotState) -> dict[str, Any]:
             lines.append(f"**File:** `{patch['file_path']}` (Issue #{patch['github_issue_number']}){pr_info}")
             lines.append(f"*{patch['explanation']}*\n")
             lines.append(f"```diff\n{patch['diff']}\n```\n")
+
+    # Senior Engineer Review Section
+    if pull_requests:
+        lines.append("#### 👨‍💻 Senior Engineer Review Ready Pull Requests")
+        for pr in pull_requests:
+            lines.append(f"- **{pr.get('title')}** -> [Review PR #{pr.get('number')}]({pr.get('html_url')})")
+            lines.append(f"  - **Contributor / Author:** `@{pr.get('author', 'nikhil-mutreja')}`")
+            lines.append(f"  - **Target Branch:** `{pr.get('head', {}).get('ref', 'fix-branch')}` -> `main`")
+            if pr.get("cwe"):
+                lines.append(f"  - **Defect Class & Location:** `{pr.get('cwe')}` in `{pr.get('file_path')}` (Line {pr.get('lineno', 1)})")
+            lines.append(f"  - **Review Status:** 🟡 `Pending Senior Engineer Sign-Off`")
+        lines.append("")
 
     # Traceability Matrix
     if actionable:

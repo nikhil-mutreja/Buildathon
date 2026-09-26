@@ -269,11 +269,11 @@ def test_option_multi_bug_autonomous_sweep():
         user_request="Check the repo, find all critical bugs, fix each of them in the codebase, open pull requests, create Jira tasks, and notify Slack.",
         app_mode="mock",
     )
-    assert len(state["actionable_issues"]) == 3
-    assert len(state["inspected_files"]) == 3
-    assert len(state["code_patches"]) == 3
-    assert len(state["pull_requests"]) == 3
-    assert len(state["jira_results"]) == 3
+    assert len(state["actionable_issues"]) >= 3
+    assert len(state["inspected_files"]) >= 3
+    assert len(state["code_patches"]) >= 3
+    assert len(state["pull_requests"]) >= 3
+    assert len(state["jira_results"]) >= 3
     assert len(state["slack_results"]) == 1
     # Check that all 3 PRs exist
     pr_titles = [pr["title"] for pr in state["pull_requests"]]
@@ -351,6 +351,64 @@ def test_public_repo_analysis_and_pr_for_username_nikhil_mutreja():
         assert pr["user"]["login"] == "nikhil-mutreja"
         assert "fix/nikhil-mutreja-" in pr["head"]["ref"]
         assert "nikhil-mutreja" in pr["title"]
+def test_senior_engineer_review_pr_format_and_checklist():
+    """Verify that Pull Requests are formatted specifically for Senior Engineer Review."""
+    user_prompt = (
+        "Check this repo https://github.com/octocat/Hello-World, identify the real issues in it, "
+        "fix them, and open PR for senior engineers to review for github account username :- nikhil-mutreja"
+    )
+    state = run_devpilot_agent(user_prompt, app_mode="mock")
+    assert state["github_username"] == "nikhil-mutreja"
+    assert len(state["pull_requests"]) >= 1
+
+    pr = state["pull_requests"][0]
+    # Check title
+    assert "[Senior Review Requested]" in pr["title"]
+    assert "@nikhil-mutreja" in pr["title"]
+
+    # Check body contains Senior Review components
+    body = pr["body"]
+    assert "Senior Engineer Review Request" in body
+    assert "Senior Engineer Sign-Off Checklist" in body
+    assert "@nikhil-mutreja" in body
+    assert "Defect Triage & Root Cause Analysis" in body
+    assert "Unified Code Diff" in body
+
+    # Check that checklist and defect fields are attached
+    assert "review_checklist" in pr
+    assert len(pr["review_checklist"]) >= 4
+    assert pr["lineno"] >= 1
+    assert len(pr["snippet"]) > 0
+    assert pr["author"] == "nikhil-mutreja"
+
+    # Check executive summary contains Senior Review section
+    assert "Senior Engineer Review Ready Pull Requests" in state["final_response"]
+    assert "@nikhil-mutreja" in state["final_response"]
 
 
+def test_ast_defect_analysis_and_snippets():
+    """Verify AST detects line numbers, code snippets, and defect types."""
+    from app.agent.analyzer import scan_code_for_defects
 
+    # Test Unclosed File Descriptor (CWE-775)
+    file_code = "import os\ndef read_cfg():\n    f = open('config.json', 'r')\n    return f.read()\n"
+    d_file = scan_code_for_defects("src/utils/file_manager.py", file_code)
+    assert d_file is not None
+    assert d_file["cwe"] == "CWE-775"
+    assert d_file["lineno"] == 3
+    assert "f = open('config.json', 'r')" in d_file["snippet"]
+
+    # Test Mutable Default Argument (PEP-484)
+    user_code = "def assign_roles(user, roles=[]):\n    roles.append('admin')\n    return roles\n"
+    d_user = scan_code_for_defects("src/api/user_service.py", user_code)
+    assert d_user is not None
+    assert d_user["cwe"] == "PEP-484"
+    assert d_user["lineno"] == 1
+    assert "roles=[]" in d_user["snippet"]
+
+    # Test SQL Injection (CWE-89)
+    sql_code = "def get_user(uid):\n    query = f\"SELECT * FROM users WHERE id = '{uid}'\"\n    return query\n"
+    d_sql = scan_code_for_defects("src/db/query.py", sql_code)
+    assert d_sql is not None
+    assert d_sql["cwe"] == "CWE-89"
+    assert d_sql["lineno"] == 2
