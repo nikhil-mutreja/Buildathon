@@ -431,6 +431,19 @@ class SwytchcodeClient:
             "content": encoded_content,
             "branch": branch,
         }
+        if not sha:
+            try:
+                existing_file = self.get_repository_file(owner=owner, repo=repo, path=path, ref=branch)
+                if isinstance(existing_file, dict) and existing_file.get("sha"):
+                    sha = existing_file["sha"]
+            except Exception:
+                try:
+                    existing_file = self.get_repository_file(owner=owner, repo=repo, path=path, ref="main")
+                    if isinstance(existing_file, dict) and existing_file.get("sha"):
+                        sha = existing_file["sha"]
+                except Exception:
+                    pass
+
         if sha:
             body["sha"] = sha
         args: dict[str, Any] = {
@@ -440,6 +453,13 @@ class SwytchcodeClient:
 
         try:
             result = self._swx.tools.execute(TOOL_GITHUB_CONTENT_UPDATE, args)
+            if isinstance(result, dict):
+                inner_data = result.get("data", {})
+                status_code = result.get("status_code")
+                data_status = inner_data.get("status") if isinstance(inner_data, dict) else None
+                if status_code in (400, 404, 409, 422) or data_status in (400, 404, 409, 422, "400", "404", "409", "422") or "error" in result:
+                    err_msg = inner_data.get("message") or result.get("error") or str(result)
+                    raise RuntimeError(f"Swytchcode GitHub file update error: {err_msg}")
             return result
         except Exception as e:
             err_msg = str(e)
@@ -525,6 +545,16 @@ class SwytchcodeClient:
                     },
                 },
             )
+            if isinstance(result, dict):
+                inner = result.get("data", {})
+                status_code = result.get("status_code")
+                data_status = inner.get("status") if isinstance(inner, dict) else None
+                if status_code in (422, 400) or data_status in (422, 400, "422", "400") or "already exists" in str(result).lower():
+                    if "already exists" in str(result).lower():
+                        logger.info(f"[TOOL] Remote branch '{branch_name}' already exists on {owner}/{repo}. Reusing branch.")
+                        return {"branch": branch_name, "base": base_branch, "created": True, "sha": sha or "HEAD"}
+                    raise RuntimeError(f"Swytchcode branch creation error for '{owner}/{repo}@{branch_name}': {inner.get('message', str(result))}")
+
             logger.info(f"[TOOL] Remote branch '{branch_name}' created on {owner}/{repo}")
             return {"branch": branch_name, "base": base_branch, "created": True, "sha": sha, "result": result}
 

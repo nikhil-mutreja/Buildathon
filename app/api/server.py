@@ -78,6 +78,8 @@ def _generate_events(req: ExecuteRequest) -> Generator[dict[str, Any], None, Non
             "jira_project": req.jira_project,
             "slack_channel": req.slack_channel,
             "app_mode": req.app_mode,
+            "intent": {},
+            "task_type": "unknown",
             "selected_tools": [],
             "plan": [],
             "github_results": [],

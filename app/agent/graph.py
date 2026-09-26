@@ -436,7 +436,7 @@ def create_git_branch_node(state: DevPilotState) -> dict[str, Any]:
     target_issue = actionable[0] if actionable else {}
     issue_num = target_issue.get("number", 1)
     fpath = target_issue.get("file_path", "fix")
-    base_name = os.path.basename(fpath).split(".")[0]
+    base_name = os.path.basename(fpath).split(".")[0] or "patch"
     branch_name = f"fix/{github_user}-gh-{issue_num}-{base_name}"
 
     decisions.append(f"Creating Git branch `{branch_name}` from `main`.")

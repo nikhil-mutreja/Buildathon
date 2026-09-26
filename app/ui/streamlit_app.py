@@ -454,29 +454,44 @@ if should_run and user_request:
         st.write(f"📂 Inspecting repository `{effective_owner}/{effective_repo}`...")
         st.write("🔬 Analyzing code and identifying issues...")
 
-        result = run_devpilot_agent(
-            user_request=user_request,
-            repo_owner=effective_owner,
-            repo_name=effective_repo,
-            github_username=github_username,
-            jira_project=jira_project,
-            slack_channel=slack_channel,
-            app_mode=app_mode,
-        )
+        try:
+            result = run_devpilot_agent(
+                user_request=user_request,
+                repo_owner=effective_owner,
+                repo_name=effective_repo,
+                github_username=github_username,
+                jira_project=jira_project,
+                slack_channel=slack_channel,
+                app_mode=app_mode,
+            )
 
-        st.session_state["last_result"] = result
+            st.session_state["last_result"] = result
 
-        # Determine final status
-        errors = result.get("errors", [])
-        test_res = result.get("test_results", {})
-        prs = result.get("pull_requests", [])
+            # Determine final status
+            errors = result.get("errors", [])
+            test_res = result.get("test_results", {})
+            prs = result.get("pull_requests", [])
 
-        if errors and not test_res.get("passed", True):
-            status.update(label="**DevPilot** — Workflow completed with issues", state="error")
-        elif prs:
-            status.update(label="**DevPilot** — Workflow completed successfully", state="complete")
-        else:
-            status.update(label="**DevPilot** — Analysis complete", state="complete")
+            if errors and not test_res.get("passed", True):
+                status.update(label="**DevPilot** — Workflow completed with issues", state="error")
+            elif prs:
+                status.update(label="**DevPilot** — Workflow completed successfully", state="complete")
+            else:
+                status.update(label="**DevPilot** — Analysis complete", state="complete")
+        except Exception as exc:
+            err_msg = str(exc)
+            status.update(label=f"**DevPilot** — Execution stopped: {err_msg[:60]}", state="error")
+            st.error(f"Execution failed: {err_msg}")
+            st.session_state["last_result"] = {
+                "user_request": user_request,
+                "repo_owner": effective_owner,
+                "repo_name": effective_repo,
+                "github_username": github_username,
+                "errors": [f"Execution error: {err_msg}"],
+                "actions_taken": ["Workflow started.", f"Failed: {err_msg}"],
+                "decisions": [f"Execution halted due to exception: {err_msg}"],
+                "final_response": f"### DevPilot Execution Error\n> ⚠️ **Error:** {err_msg}",
+            }
 
 # =============================================================================
 # Results Display
