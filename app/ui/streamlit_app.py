@@ -285,20 +285,9 @@ div[data-testid="stExpander"] {
 with st.sidebar:
     st.markdown("### ⚙️ Configuration")
 
-    env_mode = os.getenv("APP_MODE", "real").lower()
-    default_idx = 1 if env_mode in ("real", "production") else 0
-    mode_sel = st.radio(
-        "Execution Mode",
-        ["Demo Mode", "Live Mode (Real Git & Swytchcode)"],
-        index=default_idx,
-        help="Live Mode performs real Git operations and Swytchcode API calls.",
-    )
-    app_mode = "real" if "Live" in mode_sel else "mock"
-
-    if app_mode == "mock":
-        st.markdown('<span class="badge badge-demo">⬤ DEMO MODE</span>', unsafe_allow_html=True)
-    else:
-        st.markdown('<span class="badge badge-live">⬤ LIVE MODE</span>', unsafe_allow_html=True)
+    app_mode = "real"
+    st.markdown('<span class="badge badge-live">⬤ LIVE MODE (Real Git & Swytchcode)</span>', unsafe_allow_html=True)
+    st.caption("Agent runs live against real public repositories, Swytchcode tooling, and GitHub.")
 
     st.markdown("---")
     st.markdown("##### Repository")
@@ -308,7 +297,7 @@ with st.sidebar:
         help="Username for PR authorship.",
     )
     repo_owner = st.text_input("Owner / Org", value=os.getenv("GITHUB_REPO_OWNER", "nikhil-mutreja"))
-    repo_name_default = os.getenv("GITHUB_REPO_NAME", "real_test_repo")
+    repo_name_default = os.getenv("GITHUB_REPO_NAME", "Skill-Swap-Platform")
 
     st.markdown("##### Integrations")
     jira_project = st.text_input("Jira Project Key", value=os.getenv("JIRA_PROJECT_KEY", "DEV"))
@@ -345,44 +334,29 @@ st.markdown("""
 # Repository Selection
 # =============================================================================
 
-presets = {
-    "test_repositories/real_test_repo": "🎯 real_test_repo — Greeter edge-case bug (Issue #1, with tests)",
-    "test_repositories/ecommerce_service": "🛒 ecommerce_service — Float precision CWE-681, SQL Injection CWE-89",
-    "test_repositories/auth_microservice": "🔑 auth_microservice — Token leak CWE-532, Mutable defaults",
-    "test_repositories/realtime_stream_service": "⚡ realtime_stream_service — Connection pool leak CWE-775",
-    "custom": "🌐 Custom repository path or GitHub URL...",
-}
-
-col_repo, col_branch, col_status = st.columns([4, 2, 2])
+col_repo, col_branch, col_status = st.columns([5, 2, 2])
 
 with col_repo:
-    selected_preset = st.selectbox(
-        "Repository",
-        options=list(presets.keys()),
-        format_func=lambda x: presets[x],
-        index=0,
+    public_repo_input = st.text_input(
+        "Public GitHub Repository",
+        value=os.getenv("GITHUB_REPO_URL", "https://github.com/nikhil-mutreja/Skill-Swap-Platform"),
+        placeholder="https://github.com/owner/repo or owner/repo",
+        help="Enter the URL or slug of any public GitHub repository to analyze, fix, and create PRs for.",
     )
 with col_branch:
     st.text_input("Branch", value="main", disabled=True, key="branch_display")
 with col_status:
-    mode_label = "🟢 Live" if app_mode == "real" else "🟡 Demo"
-    st.text_input("Agent Status", value=f"{mode_label} · Ready", disabled=True, key="status_display")
-
-# Handle custom repo
-if selected_preset == "custom":
-    public_repo_input = st.text_input(
-        "Repository path or GitHub URL",
-        value="https://github.com/nikhil-mutreja/real_test_repo",
-        placeholder="owner/repo or local path",
-    )
-else:
-    public_repo_input = selected_preset
+    st.text_input("Agent Status", value="🟢 Live · Ready", disabled=True, key="status_display")
 
 # Resolve owner/repo
 url_m = re.search(r'github\.com/([a-zA-Z0-9_\-\.]+)/([a-zA-Z0-9_\-\.]+)', public_repo_input)
 if url_m:
     effective_owner = url_m.group(1)
     effective_repo = url_m.group(2).rstrip("/").rstrip(".git")
+elif "/" in public_repo_input.strip():
+    parts = public_repo_input.strip().split("/", 1)
+    effective_owner = parts[0]
+    effective_repo = parts[1].rstrip("/").rstrip(".git")
 else:
     effective_owner = repo_owner or "nikhil-mutreja"
     effective_repo = public_repo_input.strip()
@@ -404,7 +378,7 @@ st.markdown(f"""
     </div>
     <div class="ctx-item">
         <span class="ctx-label">Mode</span>
-        <span class="ctx-value">{app_mode.upper()}</span>
+        <span class="ctx-value">LIVE</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -419,41 +393,40 @@ st.markdown('<div class="request-title">Development Request</div>', unsafe_allow
 prompt_col1, prompt_col2, prompt_col3, prompt_col4 = st.columns(4)
 
 with prompt_col1:
-    if st.button("🎯 Fix Issue #1 & Create PR", use_container_width=True, key="q1"):
+    if st.button("🛡️ Scan, Fix All Bugs & Open PR", use_container_width=True, key="q1"):
+        st.session_state["user_prompt"] = (
+            f"Scan {public_repo_input} for all bugs, syntax errors, and defects, "
+            f"fix them, run tests, and open a pull request authored by @{github_username}."
+        )
+        st.session_state["auto_trigger"] = True
+
+with prompt_col2:
+    if st.button("🎯 Fix Issue #1 & Create PR", use_container_width=True, key="q2"):
         st.session_state["user_prompt"] = (
             f"Fix issue #1 in {public_repo_input}, run the tests, "
             f"and create a pull request authored by @{github_username}."
         )
         st.session_state["auto_trigger"] = True
 
-with prompt_col2:
-    if st.button("🔍 Analyze Issue #1 Only", use_container_width=True, key="q2"):
-        st.session_state["user_prompt"] = (
-            f"Analyze issue #1 in {public_repo_input}. "
-            f"Investigate only — do not modify code or open a PR."
-        )
-        st.session_state["auto_trigger"] = True
-
 with prompt_col3:
-    if st.button("🛡️ Scan & Fix All Bugs", use_container_width=True, key="q3"):
+    if st.button("🔍 Investigate & Code Audit Only", use_container_width=True, key="q3"):
         st.session_state["user_prompt"] = (
-            f"Scan {public_repo_input} for bugs and security vulnerabilities, "
-            f"fix them, run tests, and create pull requests authored by @{github_username}."
+            f"Audit and analyze {public_repo_input} for all bugs and defects. "
+            f"Investigate only — do not modify code or open a PR."
         )
         st.session_state["auto_trigger"] = True
 
 with prompt_col4:
     if st.button("🔗 Fix + Jira + Slack", use_container_width=True, key="q4"):
         st.session_state["user_prompt"] = (
-            f"Fix issue #1 in {public_repo_input}, create a PR, "
+            f"Scan and fix all bugs in {public_repo_input}, open a pull request, "
             f"create a Jira task, and notify Slack authored by @{github_username}."
         )
         st.session_state["auto_trigger"] = True
 
 default_prompt = st.session_state.get(
     "user_prompt",
-    f"Fix issue #1 in {public_repo_input}, run tests, "
-    f"and create a pull request authored by @{github_username}.",
+    f"Scan {public_repo_input} for all bugs, fix them, and create a pull request authored by @{github_username}.",
 )
 
 user_request = st.text_area(
@@ -478,11 +451,7 @@ if should_run and user_request:
 
     with st.status("**DevPilot** — Executing autonomous engineering workflow...", expanded=True) as status:
         st.write("🔍 Understanding request and identifying task type...")
-        time.sleep(0.3)
-
         st.write(f"📂 Inspecting repository `{effective_owner}/{effective_repo}`...")
-        time.sleep(0.2)
-
         st.write("🔬 Analyzing code and identifying issues...")
 
         result = run_devpilot_agent(
@@ -527,7 +496,7 @@ if "last_result" not in st.session_state:
     """, unsafe_allow_html=True)
     st.stop()
 
-result = st.session_state["last_result"]
+result = st.session_state.get("last_result", {})
 test_res = result.get("test_results", {})
 patches = result.get("code_patches", [])
 prs = result.get("pull_requests", [])

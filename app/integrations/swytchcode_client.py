@@ -15,6 +15,7 @@ import sys
 import json
 import time
 import base64
+import hashlib
 import logging
 import subprocess
 from typing import Any, Optional
@@ -48,7 +49,7 @@ class SwytchcodeClient:
             self.mode = "mock"
 
         # Configure Swytchcode native binary execution environment
-        workspace_root = "/home/nikhil-mutreja/buildathon"
+        workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         swy_bin = os.path.join(workspace_root, "node_modules/swytchcode-cli-linux-x64/bin/swytchcode")
         if os.path.isfile(swy_bin):
             os.environ["SWYTCHCODE_BIN"] = swy_bin
@@ -107,15 +108,14 @@ class SwytchcodeClient:
 
         # 2. Execute Swytchcode live GitHub issue retrieval
         logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_GITHUB_ISSUES} for {owner}/{repo}")
-        token = os.getenv("GITHUB_TOKEN")
         args: dict[str, Any] = {
-            "owner": owner,
-            "repo": repo,
-            "state": state,
-            "per_page": per_page,
+            "params": {
+                "owner": owner,
+                "repo": repo,
+                "state": state,
+                "per_page": per_page,
+            }
         }
-        if token:
-            args["Authorization"] = f"Bearer {token}"
 
         try:
             result = self._swx.tools.execute(TOOL_GITHUB_ISSUES, args)
@@ -134,8 +134,10 @@ class SwytchcodeClient:
 
     def _find_repository_directory(self, owner: str, repo: str) -> Optional[str]:
         """Resolve repository to an actual directory on disk if available."""
-        workspace_root = "/home/nikhil-mutreja/buildathon"
-        clean_repo = repo.rstrip("/").rstrip(".git")
+        workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        clean_repo = repo.rstrip("/")
+        if clean_repo.endswith(".git"):
+            clean_repo = clean_repo[:-4]
         repo_base = os.path.basename(clean_repo)
 
         candidates = [
@@ -146,7 +148,7 @@ class SwytchcodeClient:
             os.path.join(workspace_root, "test_repositories", clean_repo),
             f"/tmp/devpilot_repos/{owner}_{repo_base}",
             f"/tmp/devpilot_repos/{repo_base}",
-            f"/home/nikhil-mutreja/{clean_repo}",
+            os.path.join(os.path.expanduser("~"), clean_repo),
         ]
 
         if repo_base in ["real_test_repo", "real-test-repo"]:
@@ -179,14 +181,18 @@ class SwytchcodeClient:
             if os.path.isfile(full_path):
                 with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
+                # Compute git-style blob SHA (same algorithm git uses)
+                raw = content.encode("utf-8")
+                blob_header = f"blob {len(raw)}\0".encode()
+                sha = hashlib.sha1(blob_header + raw).hexdigest()
                 return {
                     "name": os.path.basename(path),
                     "path": path,
-                    "sha": "real-disk-sha",
-                    "size": len(content),
+                    "sha": sha,
+                    "size": len(raw),
                     "type": "file",
                     "raw_text": content,
-                    "content": base64.b64encode(content.encode("utf-8")).decode("utf-8"),
+                    "content": base64.b64encode(raw).decode("utf-8"),
                 }
 
         if self.is_mock():
@@ -194,23 +200,41 @@ class SwytchcodeClient:
             return self._mock_repository_file(path)
 
         logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_GITHUB_CONTENT_GET} for {path}")
-        token = os.getenv("GITHUB_TOKEN")
         args: dict[str, Any] = {
-            "owner": owner,
-            "repo": repo,
-            "path": path,
-            "ref": ref,
+            "params": {
+                "owner": owner,
+                "repo": repo,
+                "path": path,
+                "ref": ref,
+            }
         }
-        if token:
-            args["Authorization"] = f"Bearer {token}"
 
         try:
             result = self._swx.tools.execute(TOOL_GITHUB_CONTENT_GET, args)
+            data = result.get("data", result) if isinstance(result, dict) else result
+            if isinstance(data, dict):
+                content_b64 = data.get("content", "")
+                raw_text = ""
+                if content_b64:
+                    try:
+                        raw_text = base64.b64decode(content_b64).decode("utf-8", errors="ignore")
+                    except Exception:
+                        raw_text = str(content_b64)
+                return {
+                    "name": data.get("name", os.path.basename(path)),
+                    "path": data.get("path", path),
+                    "sha": data.get("sha", ""),
+                    "size": data.get("size", len(raw_text)),
+                    "type": data.get("type", "file"),
+                    "raw_text": raw_text,
+                    "content": content_b64,
+                    "_raw_result": result,
+                }
             return result
         except Exception as e:
             err_msg = str(e)
-            logger.warning(f"[TOOL] Swytchcode GitHub content get failed ({err_msg}). Falling back to repository file fixtures.")
-            return self._mock_repository_file(path)
+            logger.error(f"[TOOL] Swytchcode GitHub content get failed: {err_msg}")
+            raise RuntimeError(f"Swytchcode GitHub file read error: {err_msg}")
 
     def list_repository_files(
         self,
@@ -218,7 +242,16 @@ class SwytchcodeClient:
         repo: str,
         ref: str = "main",
     ) -> list[str]:
-        """List source code files in repository for inspection and defect scanning."""
+        """List source code files in repository for inspection and defect scanning.
+
+        Priority:
+        1. Local disk scan (for repos with a local checkout).
+        2. GitHub API tree listing (authenticated, rate-limit-aware) — real mode only.
+        3. Mock file list — mock mode only.
+
+        In REAL mode, never falls back to fixture data. Failures surface as RuntimeError.
+        """
+        # 1. Scan local disk if a checked-out repo is available
         repo_dir = self._find_repository_directory(owner, repo)
         if repo_dir and os.path.isdir(repo_dir):
             discovered = []
@@ -231,7 +264,7 @@ class SwytchcodeClient:
             if discovered:
                 return sorted(discovered)
 
-        # Fallback to mock files only if no on-disk repo found
+        # 2. Mock mode: return deterministic fixture list
         if self.is_mock():
             return [
                 "src/services/payment_service.py",
@@ -243,36 +276,114 @@ class SwytchcodeClient:
                 "src/components/ThemeToggle.tsx",
             ]
 
-        # 4. In real mode, attempt live GitHub API
+        # 3. Real mode: authenticated GitHub API tree listing with rate-limit handling.
+        # There is no Swytchcode tool for recursive tree listing (github.content.get
+        # requires a known path and cannot list the root). We use the GitHub REST API
+        # directly here, authenticated via GITHUB_TOKEN if available.
+        # Swytchcode's stored OAuth credentials are not accessible from the Python
+        # subprocess in all environments — the token env var is the authenticated path.
+        import urllib.request as _urllib_req
+        import urllib.error as _urllib_err
+        import time as _time
+
+        CODE_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx"}
+        MAX_RETRIES = 3
         token = os.getenv("GITHUB_TOKEN")
-        url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{ref}?recursive=1"
-        try:
-            import urllib.request
-            import json
-            req = urllib.request.Request(url, headers={"User-Agent": "DevPilot-Agent"})
+        target_ref = ref if ref and ref not in ("main", "master") else "HEAD"
+        url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{target_ref}?recursive=1"
+
+        for attempt in range(MAX_RETRIES):
+            req = _urllib_req.Request(url)
+            req.add_header("User-Agent", "DevPilot-Agent/1.0")
+            req.add_header("Accept", "application/vnd.github+json")
+            req.add_header("X-GitHub-Api-Version", "2022-11-28")
             if token:
                 req.add_header("Authorization", f"Bearer {token}")
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                data = json.loads(resp.read().decode())
-                tree = data.get("tree", [])
-                code_files = [
-                    item["path"] for item in tree
-                    if item.get("type") == "blob" and any(item["path"].endswith(ext) for ext in [".py", ".ts", ".tsx", ".js", ".jsx"])
-                ]
-                if code_files:
-                    return code_files
-        except Exception as e:
-            logger.warning(f"[TOOL] Could not query live GitHub tree for {owner}/{repo}: {e}. Utilizing repository code files.")
 
-        return [
-            "src/services/payment_service.py",
-            "src/auth/oauth_handler.py",
-            "src/realtime/broker.py",
-            "src/utils/file_manager.py",
-            "src/database/query_builder.py",
-            "src/api/user_service.py",
-            "src/components/ThemeToggle.tsx",
-        ]
+            try:
+                with _urllib_req.urlopen(req, timeout=15) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    tree = data.get("tree", [])
+                    code_files = [
+                        item["path"] for item in tree
+                        if item.get("type") == "blob"
+                        and any(item["path"].endswith(ext) for ext in CODE_EXTENSIONS)
+                    ]
+                    logger.info(f"[TOOL] GitHub tree listed {len(code_files)} code file(s) for {owner}/{repo}@{ref}")
+                    return sorted(code_files)
+
+            except _urllib_err.HTTPError as http_err:
+                status = http_err.code
+                # Read rate-limit headers from the error response
+                remaining = http_err.headers.get("x-ratelimit-remaining", "?")
+                reset_ts = http_err.headers.get("x-ratelimit-reset", "")
+                retry_after = http_err.headers.get("retry-after", "")
+
+                if status == 403 or status == 429:
+                    # Rate limited — determine wait time
+                    if retry_after:
+                        wait_secs = int(retry_after)
+                    elif reset_ts:
+                        wait_secs = max(0, int(reset_ts) - int(_time.time())) + 1
+                    else:
+                        wait_secs = 2 ** attempt  # exponential backoff
+
+                    human_reset = ""
+                    if reset_ts:
+                        import datetime
+                        try:
+                            human_reset = datetime.datetime.utcfromtimestamp(int(reset_ts)).strftime("%H:%M:%S UTC")
+                        except Exception:
+                            human_reset = reset_ts
+
+                    if attempt < MAX_RETRIES - 1:
+                        logger.warning(
+                            f"[TOOL] GitHub rate limit hit for {owner}/{repo} "
+                            f"(remaining={remaining}, resets={human_reset}). "
+                            f"Waiting {wait_secs}s before retry {attempt + 1}/{MAX_RETRIES - 1}."
+                        )
+                        _time.sleep(min(wait_secs, 60))  # cap wait at 60s per attempt
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f"GitHub API rate limit exceeded for {owner}/{repo}. "
+                            f"Remaining requests: {remaining}. "
+                            f"Rate limit resets at: {human_reset or 'unknown'}. "
+                            f"{'Authenticate with GITHUB_TOKEN for higher limits.' if not token else 'Wait until the reset window and retry.'}"
+                        )
+
+                elif status == 404:
+                    raise RuntimeError(
+                        f"Repository '{owner}/{repo}' not found or not accessible on GitHub "
+                        f"(HTTP 404). Check the owner and repository name."
+                    )
+                elif status == 401:
+                    raise RuntimeError(
+                        f"GitHub authentication failed (HTTP 401) for '{owner}/{repo}'. "
+                        f"Check that GITHUB_TOKEN is valid and has repo read access."
+                    )
+                elif status == 403 and remaining != "0":
+                    raise RuntimeError(
+                        f"GitHub access forbidden (HTTP 403) for '{owner}/{repo}'. "
+                        f"The token may lack required permissions."
+                    )
+                else:
+                    raise RuntimeError(
+                        f"GitHub API error {status} listing files for '{owner}/{repo}': {http_err.reason}"
+                    )
+
+            except Exception as e:
+                err_msg = str(e)
+                if attempt < MAX_RETRIES - 1 and "timeout" in err_msg.lower():
+                    backoff = 2 ** attempt
+                    logger.warning(f"[TOOL] GitHub tree request timed out ({err_msg}). Retrying in {backoff}s.")
+                    _time.sleep(backoff)
+                    continue
+                logger.error(f"[TOOL] Could not list files for {owner}/{repo}: {err_msg}")
+                raise RuntimeError(f"Could not list repository files for {owner}/{repo}: {err_msg}")
+
+        # Should not reach here
+        raise RuntimeError(f"GitHub file listing failed for {owner}/{repo} after {MAX_RETRIES} attempts.")
 
     def update_repository_file(
         self,
@@ -292,13 +403,17 @@ class SwytchcodeClient:
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(content)
             logger.info(f"[TOOL] Real code file updated on disk: {full_path}")
+            # Compute real git blob SHA for the written content
+            raw = content.encode("utf-8")
+            blob_header = f"blob {len(raw)}\0".encode()
+            content_sha = hashlib.sha1(blob_header + raw).hexdigest()
             if self.is_mock():
                 return {
                     "content": {"path": path, "sha": "mock-sha-commit-9921"},
                     "commit": {"message": message, "sha": "mock-commit-sha-4921"},
                 }
             return {
-                "content": {"path": path, "sha": "disk-sha"},
+                "content": {"path": path, "sha": content_sha},
                 "commit": {"message": message, "sha": "pending-git-commit"},
             }
 
@@ -310,20 +425,18 @@ class SwytchcodeClient:
             }
 
         logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_GITHUB_CONTENT_UPDATE} on {path}")
-        token = os.getenv("GITHUB_TOKEN")
         encoded_content = base64.b64encode(content.encode("utf-8")).decode("utf-8")
-        args: dict[str, Any] = {
-            "owner": owner,
-            "repo": repo,
-            "path": path,
+        body: dict[str, Any] = {
             "message": message,
             "content": encoded_content,
             "branch": branch,
         }
         if sha:
-            args["sha"] = sha
-        if token:
-            args["Authorization"] = f"Bearer {token}"
+            body["sha"] = sha
+        args: dict[str, Any] = {
+            "params": {"owner": owner, "repo": repo, "path": path},
+            "body": body,
+        }
 
         try:
             result = self._swx.tools.execute(TOOL_GITHUB_CONTENT_UPDATE, args)
@@ -340,11 +453,17 @@ class SwytchcodeClient:
         branch_name: str,
         base_branch: str = "main",
     ) -> dict[str, Any]:
-        """Create an actual git branch on disk or via Swytchcode github.git.refs.create."""
+        """Create a git branch via local git or Swytchcode github.git.refs.create.
+
+        For local repos with a .git directory: uses git checkout -B.
+        For remote-only GitHub repos: resolves base branch HEAD SHA via
+        github.content.get, then calls github.git.refs.create with the real SHA.
+        """
         if self.is_mock():
             logger.info(f"[TOOL] [MOCK] Simulating branch creation '{branch_name}' from '{base_branch}'")
             return {"branch": branch_name, "base": base_branch, "created": True, "mode": "mock"}
 
+        # Local git repository: create branch on disk
         repo_dir = self._find_repository_directory(owner, repo)
         if repo_dir and os.path.isdir(os.path.join(repo_dir, ".git")):
             try:
@@ -359,22 +478,88 @@ class SwytchcodeClient:
                 logger.error(err_msg)
                 raise RuntimeError(err_msg)
 
-        logger.info(f"[TOOL] Executing Swytchcode tool github.git.refs.create for branch '{branch_name}'")
-        token = os.getenv("GITHUB_TOKEN")
-        args = {
-            "owner": owner,
-            "repo": repo,
-            "body": {
-                "ref": f"refs/heads/{branch_name}",
-                "sha": "HEAD",
-            }
-        }
-        if token:
-            args["Authorization"] = f"Bearer {token}"
+        # Remote-only GitHub repo: resolve base branch HEAD SHA, then create ref via Swytchcode
+        logger.info(f"[TOOL] Resolving HEAD SHA for {owner}/{repo}@{base_branch} via github.content.get")
         try:
-            return self._swx.tools.execute("github.git.refs.create", args)
+            # Get any file to obtain the commit SHA. README.md is a common entry point.
+            # We try several common filenames.
+            sha = None
+            for probe_path in ["README.md", "README", "readme.md", "src", "package.json", "setup.py"]:
+                try:
+                    content_result = self._swx.tools.execute(
+                        TOOL_GITHUB_CONTENT_GET,
+                        {"params": {"owner": owner, "repo": repo, "path": probe_path, "ref": base_branch}},
+                    )
+                    data = content_result.get("data", content_result)
+                    if isinstance(data, dict):
+                        sha = data.get("sha")
+                    elif isinstance(data, list) and data:
+                        sha = data[0].get("sha")
+                    if sha:
+                        # github.content.get returns blob/tree SHA, not commit SHA.
+                        # We need the commit SHA from the response links or commit field.
+                        # The data from Swytchcode wraps GitHub's content response which
+                        # contains the blob SHA, not the commit SHA.
+                        # For refs.create we need the latest commit SHA on the base branch.
+                        # Use the git tree API via authenticated urllib to get commit SHA.
+                        sha = self._get_branch_head_sha(owner, repo, base_branch)
+                        if sha:
+                            break
+                except Exception:
+                    continue
+
+            if not sha:
+                raise RuntimeError(
+                    f"Could not resolve HEAD commit SHA for '{owner}/{repo}@{base_branch}'. "
+                    f"Cannot create remote branch '{branch_name}'."
+                )
+
+            logger.info(f"[TOOL] Executing Swytchcode github.git.refs.create for branch '{branch_name}' at SHA {sha[:8]}...")
+            result = self._swx.tools.execute(
+                "github.git.refs.create",
+                {
+                    "params": {"owner": owner, "repo": repo},
+                    "body": {
+                        "ref": f"refs/heads/{branch_name}",
+                        "sha": sha,
+                    },
+                },
+            )
+            logger.info(f"[TOOL] Remote branch '{branch_name}' created on {owner}/{repo}")
+            return {"branch": branch_name, "base": base_branch, "created": True, "sha": sha, "result": result}
+
+        except RuntimeError:
+            raise
         except Exception as e:
-            raise RuntimeError(f"Swytchcode branch creation error: {e}")
+            if "already exists" in str(e).lower() or "reference already exists" in str(e).lower():
+                logger.info(f"[TOOL] Remote branch '{branch_name}' already exists on {owner}/{repo}. Reusing branch.")
+                return {"branch": branch_name, "base": base_branch, "created": True, "sha": sha or "HEAD"}
+            raise RuntimeError(f"Swytchcode branch creation error for '{owner}/{repo}@{branch_name}': {e}")
+
+    def _get_branch_head_sha(self, owner: str, repo: str, branch: str) -> Optional[str]:
+        """Get the HEAD commit SHA for a branch using authenticated GitHub API."""
+        import urllib.request as _req
+        import urllib.error as _uerr
+
+        token = os.getenv("GITHUB_TOKEN")
+        url = f"https://api.github.com/repos/{owner}/{repo}/commits/{branch}?per_page=1"
+        req = _req.Request(url)
+        req.add_header("User-Agent", "DevPilot-Agent/1.0")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with _req.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if isinstance(data, list) and data:
+                    return data[0].get("sha")
+                elif isinstance(data, dict):
+                    return data.get("sha")
+        except Exception as e:
+            logger.warning(f"[TOOL] Could not get HEAD SHA for {owner}/{repo}@{branch}: {e}")
+        return None
+
 
     def commit_changes(
         self,
@@ -383,6 +568,8 @@ class SwytchcodeClient:
         file_path: str,
         message: str,
         branch_name: str,
+        content: str = "",
+        sha: Optional[str] = None,
     ) -> dict[str, Any]:
         """Commit modified files to real Git repository or via Swytchcode."""
         if self.is_mock():
@@ -416,7 +603,18 @@ class SwytchcodeClient:
                 logger.error(err_msg)
                 raise RuntimeError(err_msg)
 
-        return self.update_repository_file(owner, repo, file_path, "", message, branch_name)
+        # For remote repositories without local git checkout: commit to branch via Swytchcode
+        logger.info(f"[TOOL] Committing `{file_path}` to remote branch `{branch_name}` on {owner}/{repo}")
+        return self.update_repository_file(
+            owner=owner,
+            repo=repo,
+            path=file_path,
+            content=content,
+            message=message,
+            branch=branch_name,
+            sha=sha,
+        )
+
 
     def run_tests(
         self,
@@ -424,30 +622,47 @@ class SwytchcodeClient:
         repo: str,
         test_path: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Run project tests via pytest and capture actual stdout/stderr and exit code."""
+        """Run project tests via pytest and capture actual stdout/stderr and exit code.
+
+        In mock mode: returns simulated successful test results.
+        In real mode: executes real pytest; returns passed=False if tests fail or cannot run.
+        """
+        if self.is_mock():
+            logger.info(f"[TOOL] [MOCK] Simulating test execution for {owner}/{repo}: all tests passed")
+            return {
+                "status": "TEST PASSED",
+                "passed": True,
+                "summary": "Mock test run completed: 3 passed in 0.05s",
+                "stdout": "================ 3 passed in 0.05s ================",
+                "stderr": "",
+                "exit_code": 0,
+                "command": "pytest tests/ -v",
+            }
+
         repo_dir = self._find_repository_directory(owner, repo)
         if not repo_dir:
             return {
-                "status": "TEST NOT AVAILABLE",
-                "passed": True,
-                "summary": "Remote-only repository without local test runner.",
+                "status": "NOT_AVAILABLE",
+                "passed": False,
+                "summary": "Remote-only repository without local test runner. Tests not executed.",
                 "stdout": "",
                 "stderr": "",
-                "exit_code": 0,
+                "exit_code": -1,
             }
 
         test_dir = os.path.join(repo_dir, "tests")
         target = test_path if test_path and os.path.exists(os.path.join(repo_dir, test_path)) else (test_dir if os.path.isdir(test_dir) else None)
-        
+
         if not target:
             return {
-                "status": "TEST NOT AVAILABLE",
-                "passed": True,
-                "summary": "No test directory or test files detected in repository.",
+                "status": "NOT_AVAILABLE",
+                "passed": False,
+                "summary": "No test directory or test files detected in repository. Tests not executed.",
                 "stdout": "",
                 "stderr": "",
-                "exit_code": 0,
+                "exit_code": -1,
             }
+
 
         abs_target = os.path.join(repo_dir, target) if not os.path.isabs(target) else target
         env = {**os.environ, "PYTHONPATH": repo_dir}
@@ -517,20 +732,32 @@ class SwytchcodeClient:
             return self._mock_pull_request(owner, repo, title, head, base, body, author)
 
         logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_GITHUB_PULL_CREATE}: {title}")
-        token = os.getenv("GITHUB_TOKEN")
         args: dict[str, Any] = {
-            "owner": owner,
-            "repo": repo,
-            "title": title,
-            "head": head,
-            "base": base,
-            "body": body,
+            "params": {"owner": owner, "repo": repo},
+            "body": {
+                "title": title,
+                "head": head,
+                "base": base,
+                "body": body,
+            },
         }
-        if token:
-            args["Authorization"] = f"Bearer {token}"
 
         try:
             result = self._swx.tools.execute(TOOL_GITHUB_PULL_CREATE, args)
+            data = result.get("data", result) if isinstance(result, dict) else result
+            if isinstance(data, dict):
+                pr_num = data.get("number") or result.get("number")
+                html_url = data.get("html_url") or result.get("html_url")
+                pr_title = data.get("title") or result.get("title") or title
+                pr_state = data.get("state") or result.get("state") or "open"
+                if pr_num:
+                    result["number"] = pr_num
+                if html_url:
+                    result["html_url"] = html_url
+                if pr_title:
+                    result["title"] = pr_title
+                if pr_state:
+                    result["state"] = pr_state
             logger.info(f"[TOOL] GitHub PR created via Swytchcode: #{result.get('number', 'OK')}")
             return result
         except Exception as e:
@@ -561,21 +788,23 @@ class SwytchcodeClient:
 
         logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_JIRA_CREATE_ISSUE} in {project_key}")
         args: dict[str, Any] = {
-            "fields": {
-                "project": {"key": project_key},
-                "summary": summary,
-                "description": {
-                    "type": "doc",
-                    "version": 1,
-                    "content": [
-                        {
-                            "type": "paragraph",
-                            "content": [{"type": "text", "text": description}],
-                        }
-                    ],
-                },
-                "issuetype": {"name": issue_type},
-                "priority": {"name": priority},
+            "body": {
+                "fields": {
+                    "project": {"key": project_key},
+                    "summary": summary,
+                    "description": {
+                        "type": "doc",
+                        "version": 1,
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "content": [{"type": "text", "text": description}],
+                            }
+                        ],
+                    },
+                    "issuetype": {"name": issue_type},
+                    "priority": {"name": priority},
+                }
             }
         }
 
@@ -604,17 +833,14 @@ class SwytchcodeClient:
             return self._mock_slack_message(channel, text)
 
         logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_SLACK_POST_MESSAGE} to {channel}")
-        body: dict[str, Any] = {
+        slack_body: dict[str, Any] = {
             "channel": channel,
             "text": text,
         }
         if blocks:
-            body["blocks"] = blocks
+            slack_body["blocks"] = blocks
 
-        token = os.getenv("SLACK_BOT_TOKEN")
-        args: dict[str, Any] = {"body": body}
-        if token:
-            args["Authorization"] = f"Bearer {token}"
+        args: dict[str, Any] = {"body": slack_body}
 
         try:
             result = self._swx.tools.execute(TOOL_SLACK_POST_MESSAGE, args)

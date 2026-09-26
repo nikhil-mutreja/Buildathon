@@ -9,13 +9,14 @@ from app.integrations.swytchcode_client import SwytchcodeClient
 
 def test_real_agent_full_lifecycle_on_controlled_repo():
     """Verify Section 28 & 29: End-to-end real agent workflow on real_test_repo."""
-    workspace = "/home/nikhil-mutreja/buildathon"
+    import sys
+    workspace = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     repo_path = os.path.join(workspace, "test_repositories/real_test_repo")
 
     # 1. Verify baseline test fails before agent runs
     env = {**os.environ, "PYTHONPATH": repo_path}
     pre_test = subprocess.run(
-        ["/home/nikhil-mutreja/buildathon/.venv/bin/pytest", os.path.join(repo_path, "tests"), "-v"],
+        [sys.executable, "-m", "pytest", os.path.join(repo_path, "tests"), "-v"],
         cwd=repo_path,
         env=env,
         capture_output=True,
@@ -85,7 +86,7 @@ def test_real_agent_full_lifecycle_on_controlled_repo():
 
 def test_safety_gate_blocks_branching_and_pr_on_failing_tests():
     """Verify Section 9: If automated tests fail, agent halts and never creates branch, commit, or PR."""
-    workspace = "/home/nikhil-mutreja/buildathon"
+    workspace = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     repo_path = os.path.join(workspace, "test_repositories/real_test_repo")
 
     # Initialize client and simulate test runner failure

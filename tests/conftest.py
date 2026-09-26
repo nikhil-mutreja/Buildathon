@@ -6,7 +6,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def reset_test_repositories():
     """Ensure test repositories are always at clean git baseline before and after tests."""
-    workspace = "/home/nikhil-mutreja/buildathon"
+    workspace = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     repo_dirs = [
         os.path.join(workspace, "test_repositories/auth_microservice"),
         os.path.join(workspace, "test_repositories/ecommerce_service"),

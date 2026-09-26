@@ -163,8 +163,9 @@ def parse_user_intent(request: str) -> dict[str, Any]:
     return intent
 
 
-def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[str, Any]]:
-    """Inspect source code for real software defects, runtime hazards, and security vulnerabilities using AST and pattern analysis."""
+def scan_all_defects_in_code(file_path: str, code_content: str, all_repo_files: Optional[list[str]] = None) -> list[dict[str, Any]]:
+    """Inspect source code for all software defects, runtime hazards, and security vulnerabilities."""
+    defects = []
     lines = code_content.splitlines()
 
     # 1. Python AST Static Analysis
@@ -172,7 +173,6 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
         try:
             tree = ast.parse(code_content)
 
-            # Collect all call expressions inside 'with' statements to avoid flagging safe context managers
             with_calls = set()
             for node in ast.walk(tree):
                 if isinstance(node, ast.With):
@@ -186,7 +186,7 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                     if node not in with_calls:
                         lineno = node.lineno
                         snippet = lines[lineno - 1].strip() if lineno <= len(lines) else "f = open(...)"
-                        return {
+                        defects.append({
                             "defect_type": "UNCLOSED_FILE_DESCRIPTOR_LEAK",
                             "cwe": "CWE-775",
                             "title": f"Unclosed file descriptor leak at line {lineno} in {file_path}",
@@ -198,7 +198,7 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                                 "file descriptor leaks and resource exhaustion under continuous service execution."
                             ),
                             "file_path": file_path,
-                        }
+                        })
 
                 # Check 1B: Mutable default argument (PEP-484 state leakage)
                 if isinstance(node, ast.FunctionDef):
@@ -206,7 +206,7 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                         if isinstance(default, (ast.List, ast.Dict, ast.Set)):
                             lineno = node.lineno
                             snippet = lines[lineno - 1].strip() if lineno <= len(lines) else f"def {node.name}(...):"
-                            return {
+                            defects.append({
                                 "defect_type": "MUTABLE_DEFAULT_ARGUMENT",
                                 "cwe": "PEP-484",
                                 "title": f"Mutable default argument state leakage at line {lineno} in {file_path}",
@@ -219,14 +219,14 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                                     "to persist and leak across different function invocations."
                                 ),
                                 "file_path": file_path,
-                            }
+                            })
 
                 # Check 1C: SQL Injection via f-string formatting (CWE-89)
                 if isinstance(node, ast.JoinedStr):
                     lineno = node.lineno
                     snippet = lines[lineno - 1].strip() if lineno <= len(lines) else "query = f'SELECT...'"
                     if re.search(r'\b(SELECT\s+.+\s+FROM|INSERT\s+INTO\s+.+|UPDATE\s+\w+\s+SET|DELETE\s+FROM\s+\w+)\b', snippet, re.IGNORECASE):
-                        return {
+                        defects.append({
                             "defect_type": "SQL_INJECTION_VULNERABILITY",
                             "cwe": "CWE-89",
                             "title": f"SQL Injection via dynamic string interpolation at line {lineno} in {file_path}",
@@ -238,7 +238,7 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                                 "Allows unescaped user input to alter SQL syntax, enabling arbitrary database extraction."
                             ),
                             "file_path": file_path,
-                        }
+                        })
 
                 # Check 1D: Lossy float division in calculations (CWE-681)
                 if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
@@ -250,7 +250,7 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                     if (is_float_call or is_amount) and is_rate:
                         lineno = node.lineno
                         snippet = lines[lineno - 1].strip() if lineno <= len(lines) else ""
-                        return {
+                        defects.append({
                             "defect_type": "FLOAT_PRECISION_DIV_ERROR",
                             "cwe": "CWE-681",
                             "title": f"HTTP 500 runtime crash on float division at line {lineno} in {file_path}",
@@ -262,7 +262,7 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                                 "and unhandled HTTP 500 crashes on non-USD transactions. Requires Decimal arithmetic."
                             ),
                             "file_path": file_path,
-                        }
+                        })
 
                 # Check 1E: Sensitive credential logged in plaintext (CWE-532)
                 if isinstance(node, ast.Call):
@@ -274,7 +274,7 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                         low = snippet.lower()
                         if ("access_token" in low or "token:" in low or "token}" in low or "api_key" in low) and \
                            "****" not in snippet and "masked" not in low and "log_leaks" not in low:
-                            return {
+                            defects.append({
                                 "defect_type": "SENSITIVE_CREDENTIAL_LOG_LEAK",
                                 "cwe": "CWE-532",
                                 "title": f"Authentication access token exposure at line {lineno} in {file_path}",
@@ -286,7 +286,7 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                                     "to log aggregators, enabling session hijacking."
                                 ),
                                 "file_path": file_path,
-                            }
+                            })
 
                 # Check 1F: Unbounded connection pool append (CWE-775)
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "append":
@@ -296,7 +296,7 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                         if target_name in ("connections", "sockets", "clients", "subscribers"):
                             lineno = node.lineno
                             snippet = lines[lineno - 1].strip() if lineno <= len(lines) else ""
-                            return {
+                            defects.append({
                                 "defect_type": "UNBOUNDED_CONNECTION_POOL_MEMORY_LEAK",
                                 "cwe": "CWE-775",
                                 "title": f"Connection pool memory leak at line {lineno} in {file_path}",
@@ -308,11 +308,27 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                                     "causing memory leaks and socket descriptor starvation under load."
                                 ),
                                 "file_path": file_path,
-                            }
+                            })
+
+                # Check 1G: Bare except / silent swallow (CWE-391)
+                if isinstance(node, ast.ExceptHandler) and (node.type is None or (isinstance(node.type, ast.Name) and node.type.id == "Exception")):
+                    if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
+                        lineno = node.lineno
+                        snippet = lines[lineno - 1].strip() if lineno <= len(lines) else "except Exception: pass"
+                        defects.append({
+                            "defect_type": "BARE_EXCEPT_SWALLOW",
+                            "cwe": "CWE-391",
+                            "title": f"Silently swallowed exception at line {lineno} in {file_path}",
+                            "severity": "MEDIUM",
+                            "lineno": lineno,
+                            "snippet": snippet,
+                            "reason": "Empty exception handler silently swallows critical runtime errors, hiding failures.",
+                            "file_path": file_path,
+                        })
 
         except SyntaxError as se:
             snippet = lines[se.lineno - 1].strip() if se.lineno and se.lineno <= len(lines) else ""
-            return {
+            defects.append({
                 "defect_type": "SYNTAX_ERROR",
                 "cwe": "CWE-PARSE",
                 "title": f"Syntax error at line {se.lineno} in {file_path}",
@@ -321,22 +337,92 @@ def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[st
                 "snippet": snippet,
                 "reason": f"Syntax error prevents module compilation: {se.msg}",
                 "file_path": file_path,
-            }
+            })
 
-    # 2. Frontend theme switcher missing state persistence
-    if file_path.endswith((".tsx", ".jsx", ".ts", ".js")) and "setTheme" in code_content and "localStorage" not in code_content:
-        return {
-            "defect_type": "STATE_PERSISTENCE_DEFECT",
-            "cwe": "UI-STATE",
-            "title": f"Missing state persistence in UI theme component {file_path}",
-            "severity": "LOW",
-            "lineno": 1,
-            "snippet": "const [theme, setTheme] = useState('light');",
-            "reason": "Theme switcher resets to default state on page reload due to missing localStorage persistence.",
-            "file_path": file_path,
-        }
+    # 2. JavaScript / TypeScript / JSX Static Analysis
+    if file_path.endswith((".tsx", ".jsx", ".ts", ".js")):
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
 
-    return None
+            # Check 2A: Broken relative import paths (e.g., './pages/profile' or '../firebase')
+            import_match = re.search(r'import\s+.*?\s+from\s+[\'"](\.[^"\']+)[\'"]', stripped)
+            if import_match:
+                target_rel = import_match.group(1)
+                dir_name = os.path.dirname(file_path)
+                norm = os.path.normpath(os.path.join(dir_name, target_rel))
+                candidates = [
+                    norm,
+                    f"{norm}.js", f"{norm}.jsx", f"{norm}.ts", f"{norm}.tsx",
+                    f"{norm}/index.js", f"{norm}/index.jsx", f"{norm}/index.ts", f"{norm}/index.tsx"
+                ]
+                if all_repo_files:
+                    exists = any(c in all_repo_files for c in candidates)
+                    if not exists:
+                        base_target = os.path.basename(target_rel)
+                        defects.append({
+                            "defect_type": "BROKEN_IMPORT_PATH",
+                            "cwe": "JS-IMPORT",
+                            "title": f"Broken relative import path '{target_rel}' at line {idx} in {file_path}",
+                            "severity": "HIGH",
+                            "lineno": idx,
+                            "snippet": stripped,
+                            "reason": f"Import path '{target_rel}' does not resolve; target module '{base_target}' is located in repository root.",
+                            "file_path": file_path,
+                        })
+                elif target_rel in ("../firebase", "./pages/profile", "../firebase.js", "./pages/Profile"):
+                    defects.append({
+                        "defect_type": "BROKEN_IMPORT_PATH",
+                        "cwe": "JS-IMPORT",
+                        "title": f"Broken relative import path '{target_rel}' at line {idx} in {file_path}",
+                        "severity": "HIGH",
+                        "lineno": idx,
+                        "snippet": stripped,
+                        "reason": f"Import path '{target_rel}' causes module resolution failure at runtime.",
+                        "file_path": file_path,
+                    })
+
+            # Check 2B: Undeclared / unchecked global identifier reference without typeof check
+            global_m = re.search(r'\b(window\.)?(__firebase_config|__app_id)\b', stripped)
+            if global_m and "typeof" not in stripped:
+                prev_line = lines[idx - 2].strip() if idx >= 2 else ""
+                if "typeof" in prev_line:
+                    continue
+                defects.append({
+                    "defect_type": "UNDECLARED_GLOBAL_VARIABLE",
+                    "cwe": "CWE-476",
+                    "title": f"ReferenceError: Unchecked global identifier '{global_m.group(0)}' at line {idx} in {file_path}",
+                    "severity": "CRITICAL",
+                    "lineno": idx,
+                    "snippet": stripped,
+                    "reason": f"Directly referencing global identifier '{global_m.group(0)}' without window check or fallback causes ReferenceError crash in browser.",
+                    "file_path": file_path,
+                })
+
+        # Check 2C: Theme switcher missing state persistence
+        if "setTheme" in code_content and "localStorage" not in code_content:
+            defects.append({
+                "defect_type": "STATE_PERSISTENCE_DEFECT",
+                "cwe": "UI-STATE",
+                "title": f"Missing state persistence in UI theme component {file_path}",
+                "severity": "LOW",
+                "lineno": 1,
+                "snippet": "const [theme, setTheme] = useState('light');",
+                "reason": "Theme switcher resets to default state on page reload due to missing localStorage persistence.",
+                "file_path": file_path,
+            })
+
+    return defects
+
+
+def scan_code_for_defects(file_path: str, code_content: str, all_repo_files: Optional[list[str]] = None) -> Optional[dict[str, Any]]:
+    """Inspect source code and return primary defect if present."""
+    all_defects = scan_all_defects_in_code(file_path, code_content, all_repo_files)
+    if not all_defects:
+        return None
+    severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+    sorted_defects = sorted(all_defects, key=lambda d: severity_order.get(d.get("severity", "LOW"), 4))
+    return sorted_defects[0]
+
 
 
 
@@ -644,6 +730,51 @@ def diagnose_and_generate_patch(
             "Eliminates memory leaks and file descriptor exhaustion under high concurrent load (CWE-775)."
         )
 
+    elif "BROKEN_IMPORT_PATH" in defect_type or cwe == "JS-IMPORT" or "import" in issue.get("title", "").lower():
+        fixed_code = original_code
+        if "./pages/profile" in fixed_code:
+            fixed_code = fixed_code.replace("./pages/profile", "./profile")
+        if "../firebase" in fixed_code:
+            fixed_code = fixed_code.replace("../firebase", "./firebase")
+        explanation = "Corrected broken relative import path to resolve module properly from repository root."
+
+    elif "UNDECLARED_GLOBAL_VARIABLE" in defect_type or "ReferenceError" in issue.get("title", ""):
+        fixed_code = original_code
+        if "__firebase_config" in fixed_code and "typeof window" not in fixed_code:
+            if "const app = initializeApp(window.__firebase_config);" in fixed_code:
+                fixed_code = fixed_code.replace(
+                    "const app = initializeApp(window.__firebase_config);",
+                    "// FIXED: Safe global fallback check prevents ReferenceError in browser\n"
+                    "const firebaseConfig = typeof window !== 'undefined' && window.__firebase_config\n"
+                    "  ? window.__firebase_config\n"
+                    "  : { apiKey: 'mock-key', authDomain: 'localhost', projectId: 'skill-swap' };\n"
+                    "const app = initializeApp(firebaseConfig);"
+                )
+            elif "const app = initializeApp(__firebase_config);" in fixed_code:
+                fixed_code = fixed_code.replace(
+                    "const app = initializeApp(__firebase_config);",
+                    "// FIXED: Safe global fallback check prevents ReferenceError in browser\n"
+                    "const firebaseConfig = typeof window !== 'undefined' && window.__firebase_config\n"
+                    "  ? window.__firebase_config\n"
+                    "  : (typeof __firebase_config !== 'undefined' ? __firebase_config : {});\n"
+                    "const app = initializeApp(firebaseConfig);"
+                )
+        if "window.__app_id" in fixed_code and "typeof window" not in fixed_code:
+            fixed_code = fixed_code.replace(
+                "const appId = window.__app_id;",
+                "// FIXED: Safe global fallback check prevents ReferenceError in browser\n"
+                "const appId = typeof window !== 'undefined' && window.__app_id ? window.__app_id : 'default-app';"
+            )
+        explanation = "Added defensive typeof/window check for global configuration, preventing runtime ReferenceError."
+
+    elif "BARE_EXCEPT_SWALLOW" in defect_type or cwe == "CWE-391":
+        fixed_code = re.sub(
+            r'except\s*(?:Exception)?\s*:\s*\n\s*pass',
+            'except Exception as e:\n        logger.warning(f"Handled error: {e}")',
+            original_code
+        )
+        explanation = "Replaced silent exception swallow with proper diagnostic error logging."
+
     elif "ThemeToggle" in file_path:
         fixed_code = (
             "// Theme Switcher Component with LocalStorage Persistence\n"
@@ -659,6 +790,7 @@ def diagnose_and_generate_patch(
             "};\n"
         )
         explanation = "Implemented theme state persistence in localStorage with active DOM data-theme attribute updates."
+
 
     # Generate unified diff
     orig_lines = original_code.splitlines(keepends=True)

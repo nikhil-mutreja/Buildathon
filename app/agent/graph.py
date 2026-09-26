@@ -11,6 +11,7 @@ from app.agent.analyzer import (
     parse_user_intent,
     triage_issue,
     scan_code_for_defects,
+    scan_all_defects_in_code,
     diagnose_and_generate_patch,
     should_create_jira,
     should_send_slack,
@@ -105,6 +106,7 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
     """Triage repository issues and proactively scan codebase files for bugs."""
     raw_issues = state.get("github_results", [])
     intent = state.get("intent", {})
+    user_req = state.get("user_request", "").lower()
     target_num = intent.get("target_issue_number")
     owner = state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
     repo = state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
@@ -113,11 +115,10 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
     client = SwytchcodeClient(mode=mode)
     decisions = list(state.get("decisions", []))
     actions = list(state.get("actions_taken", []))
+    errors = list(state.get("errors", []))
 
     analyzed = []
     actionable = []
-
-    has_local_repo = client._find_repository_directory(owner, repo) is not None
 
     # 1. Triage existing GitHub issues if present
     for issue in raw_issues:
@@ -134,10 +135,32 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
         if filtered:
             actionable = filtered
 
-    # 2. Autonomous Code Defect Scan: If no issues exist, scan codebase files
-    if not actionable and intent.get("needs_code_fix", False) and not target_num:
-        decisions.append(f"Scanning codebase files in `{owner}/{repo}` for latent bugs and security vulnerabilities.")
-        repo_files = client.list_repository_files(owner=owner, repo=repo)
+    # 2. Autonomous Code Defect Scan:
+    # Scan the complete repository across all files to find ALL latent errors and issues
+    is_sweep_requested = any(w in user_req for w in ["all", "errors", "bugs", "sweep", "complete", "completely", "scan"])
+    should_scan_code = (not actionable or is_sweep_requested) and (intent.get("needs_code_fix", False) or intent.get("needs_code_analysis", False) or is_sweep_requested) and not target_num
+
+    if should_scan_code:
+        decisions.append(f"Scanning complete codebase files in `{owner}/{repo}` for latent bugs and security vulnerabilities.")
+
+        # Retrieve file list — this can fail (rate limit, auth, not found). Do NOT continue with fake data.
+        try:
+            repo_files = client.list_repository_files(owner=owner, repo=repo)
+        except RuntimeError as list_err:
+            err_msg = str(list_err)
+            logger.error(f"[AGENT] Repository file listing failed for {owner}/{repo}: {err_msg}")
+            errors.append(f"Repository inspection failed: {err_msg}")
+            decisions.append(f"Repository inspection failed for `{owner}/{repo}`: {err_msg}")
+            actions.append("Repository file listing failed — code scan skipped.")
+            return {
+                "analyzed_issues": analyzed,
+                "actionable_issues": actionable,
+                "decisions": decisions,
+                "actions_taken": actions,
+                "errors": errors,
+                "can_proceed": False,
+            }
+
         scan_idx = 1
         for fpath in repo_files:
             try:
@@ -145,34 +168,39 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
                 raw_text = f_res.get("raw_text") or ""
                 if not raw_text and "content" in f_res:
                     raw_text = base64.b64decode(f_res["content"]).decode("utf-8", errors="ignore")
-                defect = scan_code_for_defects(fpath, raw_text)
-                if defect:
-                    if not any(a.get("file_path") == fpath for a in actionable):
-                        is_act = defect["severity"] in ("CRITICAL", "HIGH")
-                        defect_item = {
-                            "id": 2000 + scan_idx,
-                            "number": 100 + scan_idx,
-                            "title": f"[{defect['cwe']}] {defect['title']}",
-                            "body": defect["reason"],
-                            "html_url": f"https://github.com/{owner}/{repo}/blob/main/{fpath}",
-                            "author": "devpilot-scanner",
-                            "labels": ["bug", defect["severity"].lower(), defect["cwe"].lower()],
-                            "file_path": fpath,
-                            "severity": defect["severity"],
-                            "is_actionable": is_act,
-                            "reason": defect["reason"],
-                            "cwe": defect.get("cwe"),
-                            "lineno": defect.get("lineno"),
-                            "snippet": defect.get("snippet"),
-                            "defect_type": defect.get("defect_type"),
-                            "jira_ticket_key": None,
-                            "pull_request_number": None,
-                        }
-                        analyzed.append(defect_item)
-                        if is_act:
-                            actionable.append(defect_item)
-                            actions.append(f"Code scanner detected defect {defect['cwe']} in `{fpath}` (line {defect.get('lineno', 1)}).")
-                        scan_idx += 1
+
+                # Scan for ALL defects in file
+                file_defects = scan_all_defects_in_code(fpath, raw_text, all_repo_files=repo_files)
+                for defect in file_defects:
+                    # Avoid duplicate issue if already in actionable for same file & defect_type
+                    if any(a.get("file_path") == fpath and a.get("defect_type") == defect["defect_type"] for a in actionable):
+                        continue
+
+                    is_act = defect["severity"] in ("CRITICAL", "HIGH", "MEDIUM")
+                    defect_item = {
+                        "id": 2000 + scan_idx,
+                        "number": 100 + scan_idx,
+                        "title": f"[{defect['cwe']}] {defect['title']}",
+                        "body": defect["reason"],
+                        "html_url": f"https://github.com/{owner}/{repo}/blob/main/{fpath}",
+                        "author": "devpilot-scanner",
+                        "labels": ["bug", defect["severity"].lower(), defect["cwe"].lower()],
+                        "file_path": fpath,
+                        "severity": defect["severity"],
+                        "is_actionable": is_act,
+                        "reason": defect["reason"],
+                        "cwe": defect.get("cwe"),
+                        "lineno": defect.get("lineno"),
+                        "snippet": defect.get("snippet"),
+                        "defect_type": defect.get("defect_type"),
+                        "jira_ticket_key": None,
+                        "pull_request_number": None,
+                    }
+                    analyzed.append(defect_item)
+                    if is_act:
+                        actionable.append(defect_item)
+                        actions.append(f"Code scanner detected defect {defect['cwe']} in `{fpath}` (line {defect.get('lineno', 1)}): {defect['title']}.")
+                    scan_idx += 1
             except Exception as e:
                 logger.warning(f"Could not scan file {fpath}: {e}")
 
@@ -187,6 +215,7 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
         "actionable_issues": actionable,
         "decisions": decisions,
         "actions_taken": actions,
+        "errors": errors,
     }
 
 
@@ -203,24 +232,34 @@ def inspect_code_node(state: DevPilotState) -> dict[str, Any]:
     errors = list(state.get("errors", []))
     inspected_files = []
 
+    fetched_files: dict[str, dict[str, Any]] = {}
     for issue in actionable:
         file_path = issue.get("file_path", "src/services/payment_service.py")
-        decisions.append(f"Inspecting codebase: reading `{file_path}` for issue #{issue['number']}.")
-        try:
-            file_res = client.get_repository_file(owner=owner, repo=repo, path=file_path)
-            raw_content = file_res.get("raw_text")
-            if not raw_content and "content" in file_res:
-                raw_content = base64.b64decode(file_res["content"]).decode("utf-8", errors="ignore")
+        if file_path not in fetched_files:
+            decisions.append(f"Inspecting codebase: reading `{file_path}` for issue #{issue['number']}.")
+            try:
+                file_res = client.get_repository_file(owner=owner, repo=repo, path=file_path)
+                raw_content = file_res.get("raw_text")
+                if not raw_content and "content" in file_res:
+                    raw_content = base64.b64decode(file_res["content"]).decode("utf-8", errors="ignore")
+                fetched_files[file_path] = {
+                    "path": file_path,
+                    "content": raw_content or "",
+                    "sha": file_res.get("sha", ""),
+                }
+                actions.append(f"Read codebase file `{file_path}` ({len(raw_content or '')} chars) via Swytchcode/filesystem.")
+            except Exception as e:
+                err_msg = f"Failed to inspect code file `{file_path}`: {str(e)}"
+                logger.error(err_msg)
+                errors.append(err_msg)
+
+        if file_path in fetched_files:
             inspected_files.append({
                 "path": file_path,
                 "github_issue_number": issue["number"],
-                "content": raw_content or "",
+                "content": fetched_files[file_path]["content"],
+                "sha": fetched_files[file_path]["sha"],
             })
-            actions.append(f"Read codebase file `{file_path}` ({len(raw_content or '')} chars) via Swytchcode/filesystem.")
-        except Exception as e:
-            err_msg = f"Failed to inspect code file `{file_path}`: {str(e)}"
-            logger.error(err_msg)
-            errors.append(err_msg)
 
     return {
         "inspected_files": inspected_files,
@@ -238,20 +277,39 @@ def generate_code_fix_node(state: DevPilotState) -> dict[str, Any]:
     actions = list(state.get("actions_taken", []))
 
     file_map = {f["path"]: f["content"] for f in inspected_files}
+    initial_code_map = dict(file_map)
     patches = []
 
     for issue in actionable:
         issue_num = issue["number"]
         fpath = issue.get("file_path", "")
-        orig_code = file_map.get(fpath) or next((f["content"] for f in inspected_files if f.get("github_issue_number") == issue_num), "")
+        current_code = file_map.get(fpath) or next((f["content"] for f in inspected_files if f.get("github_issue_number") == issue_num), "")
+        original_baseline = initial_code_map.get(fpath, current_code)
+
         if not issue.get("lineno") or not issue.get("snippet"):
-            detected = scan_code_for_defects(fpath, orig_code)
+            detected = scan_code_for_defects(fpath, current_code)
             if detected:
                 issue["lineno"] = detected.get("lineno")
                 issue["snippet"] = detected.get("snippet")
                 if not issue.get("cwe"):
                     issue["cwe"] = detected.get("cwe")
-        patch_info = diagnose_and_generate_patch(issue, orig_code)
+
+        patch_info = diagnose_and_generate_patch(issue, current_code)
+        file_map[fpath] = patch_info["fixed_code"]
+
+        # Ensure unified diff compares from original baseline
+        if original_baseline != patch_info["fixed_code"]:
+            import difflib
+            orig_lines = original_baseline.splitlines(keepends=True)
+            fixed_lines = patch_info["fixed_code"].splitlines(keepends=True)
+            patch_info["diff"] = "\n".join(difflib.unified_diff(orig_lines, fixed_lines, fromfile=f"a/{fpath}", tofile=f"b/{fpath}", lineterm=""))
+            patch_info["original_code"] = original_baseline
+
+        # Carry over SHA if available
+        matched_inspected = next((f for f in inspected_files if f["path"] == fpath), None)
+        if matched_inspected and matched_inspected.get("sha"):
+            patch_info["sha"] = matched_inspected["sha"]
+
         patches.append(patch_info)
         decisions.append(
             f"Code solution planned for #{issue_num} (`{patch_info['file_path']}`): {patch_info['explanation']}"
@@ -277,25 +335,37 @@ def modify_code_node(state: DevPilotState) -> dict[str, Any]:
     actions = list(state.get("actions_taken", []))
     errors = list(state.get("errors", []))
 
-    for patch in patches:
-        file_path = patch["file_path"]
+    repo_dir = client._find_repository_directory(owner, repo)
+
+    # Consolidate latest patch per file
+    latest_patches = {}
+    for p in patches:
+        latest_patches[p["file_path"]] = p
+
+    for file_path, patch in latest_patches.items():
         fixed_code = patch["fixed_code"]
         commit_msg = f"fix: resolve {patch.get('cwe', 'defect')} in {file_path}"
-        decisions.append(f"Modifying code file `{file_path}` ({len(fixed_code)} bytes).")
-        try:
-            client.update_repository_file(
-                owner=owner,
-                repo=repo,
-                path=file_path,
-                content=fixed_code,
-                message=commit_msg,
-                branch="main",
-            )
-            actions.append(f"Modified real code in `{file_path}` for issue #{patch.get('github_issue_number')}.")
-        except Exception as e:
-            err_msg = f"Failed to modify code file `{file_path}`: {e}"
-            logger.error(err_msg)
-            errors.append(err_msg)
+
+        if repo_dir and os.path.isdir(repo_dir):
+            decisions.append(f"Modifying local repository code file `{file_path}` ({len(fixed_code)} bytes).")
+            try:
+                client.update_repository_file(
+                    owner=owner,
+                    repo=repo,
+                    path=file_path,
+                    content=fixed_code,
+                    message=commit_msg,
+                    branch="main",
+                )
+                actions.append(f"Modified real code in `{file_path}` on local disk.")
+            except Exception as e:
+                err_msg = f"Failed to modify local code file `{file_path}`: {e}"
+                logger.error(err_msg)
+                errors.append(err_msg)
+        else:
+            # Remote-only repo: stage for commit directly to feature branch in commit_changes_node
+            decisions.append(f"Prepared patch for remote file `{file_path}` (staged for feature branch commit).")
+            actions.append(f"Staged patch for `{file_path}` for remote branch commit.")
 
     return {
         "decisions": decisions,
@@ -330,11 +400,16 @@ def run_tests_node(state: DevPilotState) -> dict[str, Any]:
         decisions.append(f"Safety Gate PASSED: {status} ({test_res.get('summary')}). All automated regression assertions succeeded.")
         actions.append(f"Executed automated test suite ({test_res.get('command')}): PASSED ({test_res.get('summary')}, exit code {test_res.get('exit_code')}). Proceeding to Git branch & commit.")
         can_proceed = True
+    elif status == "NOT_AVAILABLE":
+        decisions.append(f"Safety Gate ADVISORY: {test_res.get('summary')} Proceeding with feature branch and Pull Request for senior review.")
+        actions.append(f"Test suite not available for remote repo ({test_res.get('summary')}). Proceeding to feature branch and Pull Request.")
+        can_proceed = True
     else:
         decisions.append(f"Safety Gate BLOCKED: {status} ({test_res.get('summary')}). Halting downstream Git branch creation, commit, and Pull Request.")
         actions.append(f"Executed automated test suite ({test_res.get('command')}): FAILED ({test_res.get('summary')}, exit code {test_res.get('exit_code')}). Halting workflow.")
         errors.append(f"Test suite failure ({test_res.get('status')}): {test_res.get('summary')}")
         can_proceed = False
+
 
     return {
         "test_results": test_res,
@@ -387,7 +462,7 @@ def create_git_branch_node(state: DevPilotState) -> dict[str, Any]:
 
 
 def commit_changes_node(state: DevPilotState) -> dict[str, Any]:
-    """Commit staged code modifications to real Git repository."""
+    """Commit staged code modifications to real Git repository or remote feature branch."""
     owner = state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
     repo = state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
     mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
@@ -401,9 +476,15 @@ def commit_changes_node(state: DevPilotState) -> dict[str, Any]:
     errors = list(state.get("errors", []))
 
     commit_sha = ""
-    for patch in patches:
-        file_path = patch["file_path"]
+    # Consolidate latest patch per file to commit each file once
+    latest_patches = {}
+    for p in patches:
+        latest_patches[p["file_path"]] = p
+
+    for file_path, patch in latest_patches.items():
         commit_msg = f"fix: resolve {patch.get('cwe', 'defect')} in {file_path} by @{github_user}"
+        fixed_code = patch.get("fixed_code", "")
+        file_sha = patch.get("sha")
         try:
             c_res = client.commit_changes(
                 owner=owner,
@@ -411,9 +492,11 @@ def commit_changes_node(state: DevPilotState) -> dict[str, Any]:
                 file_path=file_path,
                 message=commit_msg,
                 branch_name=branch_name,
+                content=fixed_code,
+                sha=file_sha,
             )
-            commit_sha = c_res.get("commit_sha", "")
-            decisions.append(f"Committed changes on `{branch_name}`: SHA `{commit_sha}`.")
+            commit_sha = c_res.get("commit_sha", "") or (c_res.get("commit", {}) or {}).get("sha", "") or (c_res.get("data", {}).get("commit", {}) or {}).get("sha", "")
+            decisions.append(f"Committed changes on `{branch_name}` for `{file_path}`: SHA `{commit_sha}`.")
             actions.append(f"Created real Git commit `{commit_sha[:8] if commit_sha else 'HEAD'}`: '{commit_msg}'.")
         except Exception as e:
             err_msg = f"Failed to commit changes for `{file_path}`: {e}"
@@ -449,6 +532,16 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
     for patch in patches:
         issue_num = patch["github_issue_number"]
         file_path = patch["file_path"]
+
+        # In real mode, if a PR was already created for this feature branch on GitHub, link to it
+        if not client.is_mock() and pull_requests:
+            existing_pr = pull_requests[0]
+            existing_num = existing_pr.get("number") or existing_pr.get("data", {}).get("number")
+            for issue in actionable:
+                if issue["number"] == issue_num:
+                    issue["pull_request_number"] = existing_num
+            continue
+
         pr_title = f"[Senior Review Requested] Resolve #{issue_num}: Fix {patch.get('cwe', 'Bug')} in {os.path.basename(file_path)} (@{github_user})"
 
         checklist_items = patch.get("review_checklist", [
@@ -460,20 +553,31 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
         ])
         checklist_md = "\n".join(f"- [ ] {item}" for item in checklist_items)
 
+        # Build comprehensive defect breakdown across all patches
+        defect_breakdown = []
+        for p in patches:
+            defect_breakdown.append(
+                f"- **Defect #{p['github_issue_number']}** (`{p['file_path']}`, line {p.get('lineno', 1)}): "
+                f"`{p.get('cwe', 'CWE-DEFECT')}` — {p['explanation']}"
+            )
+        breakdown_md = "\n".join(defect_breakdown) if defect_breakdown else f"- `{patch.get('cwe', 'CWE-DEFECT')}` in `{file_path}`"
+
+        diffs_md = "\n\n".join(
+            f"**File: `{p['file_path']}`**\n```diff\n{p['diff']}\n```"
+            for p in patches if p.get("diff")
+        ) or f"```diff\n{patch['diff']}\n```"
+
         pr_body = (
             f"### 🚀 Senior Engineer Review Request\n\n"
             f"> **Submitted by:** @{github_user} via DevPilot Autonomous AI Software Engineer\n"
             f"> **Target Repository:** `{owner}/{repo}` | **Branch:** `{branch_name}` → `main`\n"
             f"> **Target Defect / Issue:** #{issue_num} | **Commit SHA:** `{commit_sha[:8] if commit_sha else 'HEAD'}`\n"
+            f"> **Total Actionable Issues Resolved:** {len(actionable)}\n"
             f"> **Review Status:** 🟡 Pending Senior Engineer Approval\n\n"
             f"#### 🔍 Defect Triage & Root Cause Analysis\n"
-            f"- **Classification / CWE:** `{patch.get('cwe', 'CWE-DEFECT')}`\n"
-            f"- **Target File:** `{file_path}` (Line **{patch.get('lineno', 1)}**)\n"
-            f"- **Vulnerable Code Snippet:**\n"
-            f"```python\n{patch.get('snippet', '')}\n```\n"
-            f"- **Technical Diagnosis & Solution:**\n{patch['explanation']}\n\n"
-            f"#### 🛠️ Unified Code Diff\n"
-            f"```diff\n{patch['diff']}\n```\n\n"
+            f"{breakdown_md}\n\n"
+            f"#### 🛠️ Unified Code Diff(s)\n"
+            f"{diffs_md}\n\n"
             f"#### 📋 Senior Engineer Sign-Off Checklist\n"
             f"{checklist_md}\n\n"
             f"---\n"
@@ -490,7 +594,26 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
                 body=pr_body,
                 author=github_user,
             )
-            pr_num = pr_res.get("number")
+
+            # Validate that the response is actually a successful PR object
+            is_error = False
+            err_reason = ""
+            if isinstance(pr_res, dict):
+                inner_data = pr_res.get("data", {})
+                if isinstance(inner_data, dict) and inner_data.get("status") in ("404", "403", "422", 404, 403, 422):
+                    is_error = True
+                    err_reason = inner_data.get("message", "GitHub API error")
+                elif "error" in pr_res:
+                    is_error = True
+                    err_reason = str(pr_res.get("error"))
+                elif not pr_res.get("number") and not pr_res.get("id") and not inner_data.get("number"):
+                    is_error = True
+                    err_reason = pr_res.get("message") or inner_data.get("message") or "No PR number returned"
+
+            if is_error:
+                raise RuntimeError(err_reason)
+
+            pr_num = pr_res.get("number") or pr_res.get("data", {}).get("number")
             pr_res["review_checklist"] = checklist_items
             pr_res["cwe"] = patch.get("cwe")
             pr_res["lineno"] = patch.get("lineno")
@@ -514,6 +637,7 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
             errors.append(f"Remote Pull Request creation restricted/failed: {pr_error}")
             actions.append(f"Attempted GitHub Pull Request creation via Swytchcode tool github.pull.create: {pr_error}")
             decisions.append(f"Remote PR creation failed ({pr_error}). Real branch `{branch_name}` and commit `{commit_sha[:8] if commit_sha else 'HEAD'}` preserved locally.")
+
 
     return {
         "actionable_issues": actionable,
