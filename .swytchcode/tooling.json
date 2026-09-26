@@ -1,0 +1,4455 @@
+{
+  "editor": "none",
+  "integrations": {
+    "GitHub.github": {
+      "version": "1.1.4"
+    },
+    "Jira.jira": {
+      "version": "v1"
+    },
+    "Slack.slack": {
+      "version": "1.7.0"
+    }
+  },
+  "mode": "sandbox",
+  "tools": {
+    "github.issue.get1": {
+      "desc": "List issues in a repository. Only open issues will be listed.\n\n\u003e [!NOTE]\n\u003e GitHub's REST API considers every pull request an issue, but not every issue is a pull request. For this reason, \"Issues\" endpoints may return both issues and pull requests in the response. You can identify pull requests by the `pull_request` key. Be aware that the `id` of a pull request returned from \"Issues\" endpoints will be an _issue id_. To find out the pull request id, use the \"[List pull requests](https://docs.github.com/rest/pulls/pulls#list-pull-requests)\" endpoint.\n\nThis endpoint supports the following custom media types. For more information, see \"[Media types](https://docs.github.com/rest/using-the-rest-api/getting-started-with-the-rest-api#media-types).\"\n\n- **`application/vnd.github.raw+json`**: Returns the raw markdown body. Response will include `body`. This is the default if you do not pass any specific media type.\n- **`application/vnd.github.text+json`**: Returns a text only representation of the markdown body. Response will include `body_text`.\n- **`application/vnd.github.html+json`**: Returns HTML rendered from the body's markdown. Response will include `body_html`.\n- **`application/vnd.github.full+json`**: Returns raw, text, and HTML representations. Response will include `body`, `body_text`, and `body_html`.",
+      "inputs": [
+        {
+          "owner": {
+            "LOCATION": "path",
+            "REQUIRED": true,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "repo": {
+            "LOCATION": "path",
+            "REQUIRED": true,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "milestone": {
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "state": {
+            "DEFAULT": "open",
+            "ENUM": [
+              "open",
+              "closed",
+              "all"
+            ],
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "assignee": {
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "type": {
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "creator": {
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "mentioned": {
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "issue_field_values": {
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "labels": {
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "sort": {
+            "DEFAULT": "created",
+            "ENUM": [
+              "created",
+              "updated",
+              "comments"
+            ],
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "direction": {
+            "DEFAULT": "desc",
+            "ENUM": [
+              "asc",
+              "desc"
+            ],
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "since": {
+            "FORMAT": "date-time",
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "TIMESTAMP"
+          }
+        },
+        {
+          "per_page": {
+            "DEFAULT": 30,
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "INT"
+          }
+        },
+        {
+          "page": {
+            "DEFAULT": 1,
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "INT"
+          }
+        }
+      ],
+      "integration": "GitHub.github@1.1.4",
+      "method_hash": "7eb35a7c4de1f83e2c52f1c4c68227d53c38737d55987343d09f3f23152639ba",
+      "output": {
+        "schema": {
+          "items": {
+            "properties": {
+              "active_lock_reason": {
+                "required": false,
+                "type": "string"
+              },
+              "assignee": {
+                "properties": {
+                  "avatar_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "email": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "events_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "followers_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "following_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "gists_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "gravatar_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "html_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "id": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "login": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "name": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "organizations_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "received_events_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "repos_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "site_admin": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "starred_at": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "starred_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "subscriptions_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "type": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "user_view_type": {
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "login",
+                  "id",
+                  "node_id",
+                  "avatar_url",
+                  "gravatar_id",
+                  "url",
+                  "html_url",
+                  "followers_url",
+                  "following_url",
+                  "gists_url",
+                  "starred_url",
+                  "subscriptions_url",
+                  "organizations_url",
+                  "repos_url",
+                  "events_url",
+                  "received_events_url",
+                  "type",
+                  "site_admin"
+                ],
+                "type": "object"
+              },
+              "assignees": {
+                "items": {
+                  "properties": {
+                    "avatar_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "email": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "events_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "followers_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "following_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "gists_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "gravatar_id": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "html_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "id": {
+                      "required": true,
+                      "type": "integer"
+                    },
+                    "login": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "name": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "node_id": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "organizations_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "received_events_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "repos_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "site_admin": {
+                      "required": true,
+                      "type": "boolean"
+                    },
+                    "starred_at": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "starred_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "subscriptions_url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "type": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "url": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "user_view_type": {
+                      "required": false,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "login",
+                    "id",
+                    "node_id",
+                    "avatar_url",
+                    "gravatar_id",
+                    "url",
+                    "html_url",
+                    "followers_url",
+                    "following_url",
+                    "gists_url",
+                    "starred_url",
+                    "subscriptions_url",
+                    "organizations_url",
+                    "repos_url",
+                    "events_url",
+                    "received_events_url",
+                    "type",
+                    "site_admin"
+                  ],
+                  "type": "object"
+                },
+                "required": false,
+                "type": "array"
+              },
+              "author_association": {
+                "required": false,
+                "type": "string"
+              },
+              "body": {
+                "required": false,
+                "type": "string"
+              },
+              "body_html": {
+                "required": false,
+                "type": "string"
+              },
+              "body_text": {
+                "required": false,
+                "type": "string"
+              },
+              "closed_at": {
+                "required": true,
+                "type": "TIMESTAMP"
+              },
+              "closed_by": {
+                "properties": {
+                  "avatar_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "email": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "events_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "followers_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "following_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "gists_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "gravatar_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "html_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "id": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "login": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "name": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "organizations_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "received_events_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "repos_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "site_admin": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "starred_at": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "starred_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "subscriptions_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "type": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "user_view_type": {
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "login",
+                  "id",
+                  "node_id",
+                  "avatar_url",
+                  "gravatar_id",
+                  "url",
+                  "html_url",
+                  "followers_url",
+                  "following_url",
+                  "gists_url",
+                  "starred_url",
+                  "subscriptions_url",
+                  "organizations_url",
+                  "repos_url",
+                  "events_url",
+                  "received_events_url",
+                  "type",
+                  "site_admin"
+                ],
+                "type": "object"
+              },
+              "comments": {
+                "required": true,
+                "type": "integer"
+              },
+              "comments_url": {
+                "required": true,
+                "type": "string"
+              },
+              "created_at": {
+                "required": true,
+                "type": "TIMESTAMP"
+              },
+              "draft": {
+                "required": false,
+                "type": "boolean"
+              },
+              "events_url": {
+                "required": true,
+                "type": "string"
+              },
+              "html_url": {
+                "required": true,
+                "type": "string"
+              },
+              "id": {
+                "required": true,
+                "type": "integer"
+              },
+              "issue_dependencies_summary": {
+                "properties": {
+                  "blocked_by": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "blocking": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "total_blocked_by": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "total_blocking": {
+                    "required": true,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "blocked_by",
+                  "blocking",
+                  "total_blocked_by",
+                  "total_blocking"
+                ],
+                "type": "object"
+              },
+              "issue_field_values": {
+                "items": {
+                  "properties": {
+                    "data_type": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "issue_field_id": {
+                      "required": true,
+                      "type": "integer"
+                    },
+                    "issue_field_name": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "multi_select_options": {
+                      "items": {
+                        "properties": {
+                          "color": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "id": {
+                            "required": true,
+                            "type": "integer"
+                          },
+                          "name": {
+                            "required": true,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "color"
+                        ],
+                        "type": "object"
+                      },
+                      "required": false,
+                      "type": "array"
+                    },
+                    "node_id": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "single_select_option": {
+                      "properties": {
+                        "color": {
+                          "required": true,
+                          "type": "string"
+                        },
+                        "id": {
+                          "required": true,
+                          "type": "integer"
+                        },
+                        "name": {
+                          "required": true,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "color"
+                      ],
+                      "type": "object"
+                    },
+                    "value": {
+                      "properties": {
+                        "_COMPOSITION": {
+                          "required": false,
+                          "type": "ANY_OF"
+                        },
+                        "variant_0": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "variant_1": {
+                          "required": false,
+                          "type": "FLOAT"
+                        },
+                        "variant_2": {
+                          "required": false,
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "issue_field_id",
+                    "node_id",
+                    "data_type",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "required": false,
+                "type": "array"
+              },
+              "labels": {
+                "items": {
+                  "properties": {
+                    "_COMPOSITION": {
+                      "required": false,
+                      "type": "ONE_OF"
+                    },
+                    "variant_0": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "variant_1": {
+                      "properties": {
+                        "color": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "default": {
+                          "required": false,
+                          "type": "boolean"
+                        },
+                        "description": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "id": {
+                          "required": false,
+                          "type": "integer"
+                        },
+                        "name": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "node_id": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "url": {
+                          "required": false,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "required": true,
+                "type": "array"
+              },
+              "labels_url": {
+                "required": true,
+                "type": "string"
+              },
+              "locked": {
+                "required": true,
+                "type": "boolean"
+              },
+              "milestone": {
+                "properties": {
+                  "closed_at": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  },
+                  "closed_issues": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "created_at": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  },
+                  "creator": {
+                    "properties": {
+                      "avatar_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "email": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "events_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "followers_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "following_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "gists_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "gravatar_id": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "html_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "id": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "login": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "name": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "node_id": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "organizations_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "received_events_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "repos_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "site_admin": {
+                        "required": true,
+                        "type": "boolean"
+                      },
+                      "starred_at": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "starred_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "subscriptions_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "type": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "user_view_type": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "login",
+                      "id",
+                      "node_id",
+                      "avatar_url",
+                      "gravatar_id",
+                      "url",
+                      "html_url",
+                      "followers_url",
+                      "following_url",
+                      "gists_url",
+                      "starred_url",
+                      "subscriptions_url",
+                      "organizations_url",
+                      "repos_url",
+                      "events_url",
+                      "received_events_url",
+                      "type",
+                      "site_admin"
+                    ],
+                    "type": "object"
+                  },
+                  "description": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "due_on": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  },
+                  "html_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "id": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "labels_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "number": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "open_issues": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "state": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "title": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  },
+                  "url": {
+                    "required": true,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url",
+                  "html_url",
+                  "labels_url",
+                  "id",
+                  "node_id",
+                  "number",
+                  "state",
+                  "title",
+                  "description",
+                  "creator",
+                  "open_issues",
+                  "closed_issues",
+                  "created_at",
+                  "updated_at",
+                  "closed_at",
+                  "due_on"
+                ],
+                "type": "object"
+              },
+              "node_id": {
+                "required": true,
+                "type": "string"
+              },
+              "number": {
+                "required": true,
+                "type": "integer"
+              },
+              "parent_issue_url": {
+                "required": false,
+                "type": "string"
+              },
+              "performed_via_github_app": {
+                "properties": {
+                  "client_id": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  },
+                  "description": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "events": {
+                    "required": true,
+                    "type": "[]STRING"
+                  },
+                  "external_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "html_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "id": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "installations_count": {
+                    "required": false,
+                    "type": "integer"
+                  },
+                  "name": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "owner": {
+                    "properties": {
+                      "_COMPOSITION": {
+                        "required": false,
+                        "type": "ONE_OF"
+                      },
+                      "variant_enterprise": {
+                        "properties": {
+                          "avatar_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "required": true,
+                            "type": "TIMESTAMP"
+                          },
+                          "description": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "html_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "id": {
+                            "required": true,
+                            "type": "integer"
+                          },
+                          "name": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "node_id": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "slug": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "required": true,
+                            "type": "TIMESTAMP"
+                          },
+                          "website_url": {
+                            "required": false,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "html_url",
+                          "id",
+                          "node_id",
+                          "name",
+                          "slug",
+                          "created_at",
+                          "updated_at",
+                          "avatar_url"
+                        ],
+                        "type": "object"
+                      },
+                      "variant_simple_user_dac9111b": {
+                        "properties": {
+                          "avatar_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "email": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "events_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "followers_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "following_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "gists_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "gravatar_id": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "html_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "id": {
+                            "required": true,
+                            "type": "integer"
+                          },
+                          "login": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "name": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "node_id": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "organizations_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "received_events_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "repos_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "site_admin": {
+                            "required": true,
+                            "type": "boolean"
+                          },
+                          "starred_at": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "starred_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "subscriptions_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "type": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "user_view_type": {
+                            "required": false,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "id",
+                          "node_id",
+                          "avatar_url",
+                          "gravatar_id",
+                          "url",
+                          "html_url",
+                          "followers_url",
+                          "following_url",
+                          "gists_url",
+                          "starred_url",
+                          "subscriptions_url",
+                          "organizations_url",
+                          "repos_url",
+                          "events_url",
+                          "received_events_url",
+                          "type",
+                          "site_admin"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "permissions": {
+                    "properties": {
+                      "checks": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "contents": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "deployments": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "issues": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "metadata": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "slug": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  }
+                },
+                "required": [
+                  "id",
+                  "node_id",
+                  "owner",
+                  "name",
+                  "description",
+                  "external_url",
+                  "html_url",
+                  "created_at",
+                  "updated_at",
+                  "permissions",
+                  "events"
+                ],
+                "type": "object"
+              },
+              "pinned_comment": {
+                "properties": {
+                  "author_association": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "body": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "body_html": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "body_text": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  },
+                  "html_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "id": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "issue_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "minimized": {
+                    "properties": {
+                      "reason": {
+                        "required": true,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "reason"
+                    ],
+                    "type": "object"
+                  },
+                  "node_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "performed_via_github_app": {
+                    "properties": {
+                      "client_id": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "required": true,
+                        "type": "TIMESTAMP"
+                      },
+                      "description": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "events": {
+                        "required": true,
+                        "type": "[]STRING"
+                      },
+                      "external_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "html_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "id": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "installations_count": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "name": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "node_id": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "owner": {
+                        "properties": {
+                          "_COMPOSITION": {
+                            "required": false,
+                            "type": "ONE_OF"
+                          },
+                          "variant_enterprise": {
+                            "properties": {
+                              "avatar_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "created_at": {
+                                "required": true,
+                                "type": "TIMESTAMP"
+                              },
+                              "description": {
+                                "required": false,
+                                "type": "string"
+                              },
+                              "html_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "id": {
+                                "required": true,
+                                "type": "integer"
+                              },
+                              "name": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "node_id": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "slug": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "updated_at": {
+                                "required": true,
+                                "type": "TIMESTAMP"
+                              },
+                              "website_url": {
+                                "required": false,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "html_url",
+                              "id",
+                              "node_id",
+                              "name",
+                              "slug",
+                              "created_at",
+                              "updated_at",
+                              "avatar_url"
+                            ],
+                            "type": "object"
+                          },
+                          "variant_simple_user_dac9111b": {
+                            "properties": {
+                              "avatar_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "email": {
+                                "required": false,
+                                "type": "string"
+                              },
+                              "events_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "followers_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "following_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "gists_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "gravatar_id": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "html_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "id": {
+                                "required": true,
+                                "type": "integer"
+                              },
+                              "login": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "name": {
+                                "required": false,
+                                "type": "string"
+                              },
+                              "node_id": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "organizations_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "received_events_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "repos_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "site_admin": {
+                                "required": true,
+                                "type": "boolean"
+                              },
+                              "starred_at": {
+                                "required": false,
+                                "type": "string"
+                              },
+                              "starred_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "subscriptions_url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "type": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "url": {
+                                "required": true,
+                                "type": "string"
+                              },
+                              "user_view_type": {
+                                "required": false,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "id",
+                              "node_id",
+                              "avatar_url",
+                              "gravatar_id",
+                              "url",
+                              "html_url",
+                              "followers_url",
+                              "following_url",
+                              "gists_url",
+                              "starred_url",
+                              "subscriptions_url",
+                              "organizations_url",
+                              "repos_url",
+                              "events_url",
+                              "received_events_url",
+                              "type",
+                              "site_admin"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "permissions": {
+                        "properties": {
+                          "checks": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "contents": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "deployments": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "issues": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "metadata": {
+                            "required": false,
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "slug": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "required": true,
+                        "type": "TIMESTAMP"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "node_id",
+                      "owner",
+                      "name",
+                      "description",
+                      "external_url",
+                      "html_url",
+                      "created_at",
+                      "updated_at",
+                      "permissions",
+                      "events"
+                    ],
+                    "type": "object"
+                  },
+                  "pin": {
+                    "properties": {
+                      "pinned_at": {
+                        "required": true,
+                        "type": "TIMESTAMP"
+                      },
+                      "pinned_by": {
+                        "properties": {
+                          "avatar_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "email": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "events_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "followers_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "following_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "gists_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "gravatar_id": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "html_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "id": {
+                            "required": true,
+                            "type": "integer"
+                          },
+                          "login": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "name": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "node_id": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "organizations_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "received_events_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "repos_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "site_admin": {
+                            "required": true,
+                            "type": "boolean"
+                          },
+                          "starred_at": {
+                            "required": false,
+                            "type": "string"
+                          },
+                          "starred_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "subscriptions_url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "type": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "url": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "user_view_type": {
+                            "required": false,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "id",
+                          "node_id",
+                          "avatar_url",
+                          "gravatar_id",
+                          "url",
+                          "html_url",
+                          "followers_url",
+                          "following_url",
+                          "gists_url",
+                          "starred_url",
+                          "subscriptions_url",
+                          "organizations_url",
+                          "repos_url",
+                          "events_url",
+                          "received_events_url",
+                          "type",
+                          "site_admin"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "pinned_at",
+                      "pinned_by"
+                    ],
+                    "type": "object"
+                  },
+                  "reactions": {
+                    "properties": {
+                      "+1": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "-1": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "confused": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "eyes": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "heart": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "hooray": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "laugh": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "rocket": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "total_count": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "url": {
+                        "required": true,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "url",
+                      "total_count",
+                      "+1",
+                      "-1",
+                      "laugh",
+                      "confused",
+                      "heart",
+                      "hooray",
+                      "eyes",
+                      "rocket"
+                    ],
+                    "type": "object"
+                  },
+                  "updated_at": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  },
+                  "url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "user": {
+                    "properties": {
+                      "avatar_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "email": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "events_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "followers_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "following_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "gists_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "gravatar_id": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "html_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "id": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "login": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "name": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "node_id": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "organizations_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "received_events_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "repos_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "site_admin": {
+                        "required": true,
+                        "type": "boolean"
+                      },
+                      "starred_at": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "starred_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "subscriptions_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "type": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "user_view_type": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "login",
+                      "id",
+                      "node_id",
+                      "avatar_url",
+                      "gravatar_id",
+                      "url",
+                      "html_url",
+                      "followers_url",
+                      "following_url",
+                      "gists_url",
+                      "starred_url",
+                      "subscriptions_url",
+                      "organizations_url",
+                      "repos_url",
+                      "events_url",
+                      "received_events_url",
+                      "type",
+                      "site_admin"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "id",
+                  "node_id",
+                  "url",
+                  "html_url",
+                  "user",
+                  "created_at",
+                  "updated_at",
+                  "issue_url"
+                ],
+                "type": "object"
+              },
+              "pull_request": {
+                "properties": {
+                  "diff_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "html_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "merged_at": {
+                    "required": false,
+                    "type": "TIMESTAMP"
+                  },
+                  "patch_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "url": {
+                    "required": true,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "diff_url",
+                  "html_url",
+                  "patch_url",
+                  "url"
+                ],
+                "type": "object"
+              },
+              "reactions": {
+                "properties": {
+                  "+1": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "-1": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "confused": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "eyes": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "heart": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "hooray": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "laugh": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "rocket": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "total_count": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "url": {
+                    "required": true,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url",
+                  "total_count",
+                  "+1",
+                  "-1",
+                  "laugh",
+                  "confused",
+                  "heart",
+                  "hooray",
+                  "eyes",
+                  "rocket"
+                ],
+                "type": "object"
+              },
+              "repository": {
+                "properties": {
+                  "allow_auto_merge": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "allow_forking": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "allow_merge_commit": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "allow_rebase_merge": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "allow_squash_merge": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "allow_update_branch": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "anonymous_access_enabled": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "archive_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "archived": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "assignees_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "blobs_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "branches_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "clone_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "code_search_index_status": {
+                    "properties": {
+                      "lexical_commit_sha": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "lexical_search_ok": {
+                        "required": false,
+                        "type": "boolean"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "collaborators_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "comments_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "commits_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "compare_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "contents_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "contributors_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  },
+                  "default_branch": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "delete_branch_on_merge": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "deployments_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "description": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "disabled": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "downloads_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "events_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "fork": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "forks": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "forks_count": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "forks_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "git_commits_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "git_refs_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "git_tags_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "git_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "has_discussions": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "has_downloads": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "has_issues": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "has_pages": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "has_projects": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "has_pull_requests": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "has_wiki": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "homepage": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "hooks_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "html_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "id": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "is_template": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "issue_comment_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "issue_events_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "issues_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "keys_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "labels_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "language": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "languages_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "license": {
+                    "properties": {
+                      "html_url": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "key": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "name": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "node_id": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "spdx_id": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "url": {
+                        "required": true,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "name",
+                      "url",
+                      "spdx_id",
+                      "node_id"
+                    ],
+                    "type": "object"
+                  },
+                  "master_branch": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "merge_commit_message": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "merge_commit_title": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "merges_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "milestones_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "mirror_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "name": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "notifications_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "open_issues": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "open_issues_count": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "owner": {
+                    "properties": {
+                      "avatar_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "email": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "events_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "followers_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "following_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "gists_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "gravatar_id": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "html_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "id": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "login": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "name": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "node_id": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "organizations_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "received_events_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "repos_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "site_admin": {
+                        "required": true,
+                        "type": "boolean"
+                      },
+                      "starred_at": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "starred_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "subscriptions_url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "type": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "url": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "user_view_type": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "login",
+                      "id",
+                      "node_id",
+                      "avatar_url",
+                      "gravatar_id",
+                      "url",
+                      "html_url",
+                      "followers_url",
+                      "following_url",
+                      "gists_url",
+                      "starred_url",
+                      "subscriptions_url",
+                      "organizations_url",
+                      "repos_url",
+                      "events_url",
+                      "received_events_url",
+                      "type",
+                      "site_admin"
+                    ],
+                    "type": "object"
+                  },
+                  "permissions": {
+                    "properties": {
+                      "admin": {
+                        "required": true,
+                        "type": "boolean"
+                      },
+                      "maintain": {
+                        "required": false,
+                        "type": "boolean"
+                      },
+                      "pull": {
+                        "required": true,
+                        "type": "boolean"
+                      },
+                      "push": {
+                        "required": true,
+                        "type": "boolean"
+                      },
+                      "triage": {
+                        "required": false,
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "admin",
+                      "pull",
+                      "push"
+                    ],
+                    "type": "object"
+                  },
+                  "private": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "pull_request_creation_policy": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "pulls_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "pushed_at": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  },
+                  "releases_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "size": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "squash_merge_commit_message": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "squash_merge_commit_title": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "ssh_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "stargazers_count": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "stargazers_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "starred_at": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "statuses_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "subscribers_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "subscription_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "svn_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "tags_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "teams_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "temp_clone_token": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "topics": {
+                    "required": false,
+                    "type": "[]STRING"
+                  },
+                  "trees_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "required": true,
+                    "type": "TIMESTAMP"
+                  },
+                  "url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "use_squash_pr_title_as_default": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "visibility": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "watchers": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "watchers_count": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "web_commit_signoff_required": {
+                    "required": false,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "node_id",
+                  "name",
+                  "full_name",
+                  "license",
+                  "forks",
+                  "owner",
+                  "private",
+                  "html_url",
+                  "description",
+                  "fork",
+                  "url",
+                  "archive_url",
+                  "assignees_url",
+                  "blobs_url",
+                  "branches_url",
+                  "collaborators_url",
+                  "comments_url",
+                  "commits_url",
+                  "compare_url",
+                  "contents_url",
+                  "contributors_url",
+                  "deployments_url",
+                  "downloads_url",
+                  "events_url",
+                  "forks_url",
+                  "git_commits_url",
+                  "git_refs_url",
+                  "git_tags_url",
+                  "git_url",
+                  "issue_comment_url",
+                  "issue_events_url",
+                  "issues_url",
+                  "keys_url",
+                  "labels_url",
+                  "languages_url",
+                  "merges_url",
+                  "milestones_url",
+                  "notifications_url",
+                  "pulls_url",
+                  "releases_url",
+                  "ssh_url",
+                  "stargazers_url",
+                  "statuses_url",
+                  "subscribers_url",
+                  "subscription_url",
+                  "tags_url",
+                  "teams_url",
+                  "trees_url",
+                  "clone_url",
+                  "mirror_url",
+                  "hooks_url",
+                  "svn_url",
+                  "homepage",
+                  "language",
+                  "forks_count",
+                  "stargazers_count",
+                  "watchers_count",
+                  "size",
+                  "default_branch",
+                  "open_issues_count",
+                  "has_issues",
+                  "has_projects",
+                  "has_wiki",
+                  "has_pages",
+                  "has_downloads",
+                  "archived",
+                  "disabled",
+                  "pushed_at",
+                  "created_at",
+                  "updated_at",
+                  "open_issues",
+                  "watchers"
+                ],
+                "type": "object"
+              },
+              "repository_url": {
+                "required": true,
+                "type": "string"
+              },
+              "state": {
+                "required": true,
+                "type": "string"
+              },
+              "state_reason": {
+                "required": false,
+                "type": "string"
+              },
+              "sub_issues_summary": {
+                "properties": {
+                  "completed": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "percent_completed": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "total": {
+                    "required": true,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "completed",
+                  "percent_completed"
+                ],
+                "type": "object"
+              },
+              "timeline_url": {
+                "required": false,
+                "type": "string"
+              },
+              "title": {
+                "required": true,
+                "type": "string"
+              },
+              "type": {
+                "properties": {
+                  "color": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "required": false,
+                    "type": "TIMESTAMP"
+                  },
+                  "description": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "id": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "is_enabled": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "required": false,
+                    "type": "TIMESTAMP"
+                  }
+                },
+                "required": [
+                  "id",
+                  "node_id",
+                  "name",
+                  "description"
+                ],
+                "type": "object"
+              },
+              "updated_at": {
+                "required": true,
+                "type": "TIMESTAMP"
+              },
+              "url": {
+                "required": true,
+                "type": "string"
+              },
+              "user": {
+                "properties": {
+                  "avatar_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "email": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "events_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "followers_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "following_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "gists_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "gravatar_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "html_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "id": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "login": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "name": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "organizations_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "received_events_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "repos_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "site_admin": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "starred_at": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "starred_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "subscriptions_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "type": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "user_view_type": {
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "login",
+                  "id",
+                  "node_id",
+                  "avatar_url",
+                  "gravatar_id",
+                  "url",
+                  "html_url",
+                  "followers_url",
+                  "following_url",
+                  "gists_url",
+                  "starred_url",
+                  "subscriptions_url",
+                  "organizations_url",
+                  "repos_url",
+                  "events_url",
+                  "received_events_url",
+                  "type",
+                  "site_admin"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "node_id",
+              "url",
+              "repository_url",
+              "labels_url",
+              "comments_url",
+              "events_url",
+              "html_url",
+              "number",
+              "state",
+              "title",
+              "user",
+              "labels",
+              "assignee",
+              "milestone",
+              "locked",
+              "comments",
+              "closed_at",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "status": 200
+      },
+      "summary": "List repository issues",
+      "type": "method"
+    },
+    "jira.api.issue.create": {
+      "desc": "Creates an issue or, where the option to create subtasks is enabled in Jira, a subtask. A transition may be applied, to move the issue or subtask to a workflow step other than the default start step, and issue properties set.\n\nThe content of the issue or subtask is defined using `update` and `fields`. The fields that can be set in the issue or subtask are determined using the [ Get create issue metadata](#api-rest-api-3-issue-createmeta-get). These are the same fields that appear on the issue's create screen. Note that the `description`, `environment`, and any `textarea` type custom fields (multi-line text fields) take Atlassian Document Format content. Single line custom fields (`textfield`) accept a string and don't handle Atlassian Document Format content.\n\nCreating a subtask differs from creating an issue as follows:\n\n *  `issueType` must be set to a subtask issue type (use [ Get create issue metadata](#api-rest-api-3-issue-createmeta-get) to find subtask issue types).\n *  `parent` must contain the ID or key of the parent issue.\n\nIn a next-gen project any issue may be made a child providing that the parent and child are members of the same project.\n\n**[Permissions](#permissions) required:** *Browse projects* and *Create issues* [project permissions](https://confluence.atlassian.com/x/yodKLg) for the project in which the issue or subtask is created.",
+      "inputs": [
+        {
+          "updateHistory": {
+            "DEFAULT": false,
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "BOOL"
+          }
+        },
+        {
+          "body": {
+            "CONTENT_TYPE": "application/json",
+            "LOCATION": "body",
+            "REQUIRED": true,
+            "TYPE": "OBJECT",
+            "schema": {
+              "properties": {
+                "fields": {
+                  "required": false,
+                  "type": "map[STRING]STRUCT(IssueUpdateDetails_fields_Value)"
+                },
+                "historyMetadata": {
+                  "properties": {
+                    "activityDescription": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "activityDescriptionKey": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "actor": {
+                      "properties": {
+                        "avatarUrl": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "displayNameKey": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "id": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "type": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "url": {
+                          "required": false,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "cause": {
+                      "properties": {
+                        "avatarUrl": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "displayNameKey": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "id": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "type": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "url": {
+                          "required": false,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "description": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "descriptionKey": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "emailDescription": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "emailDescriptionKey": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "extraData": {
+                      "required": false,
+                      "type": "map[STRING]STRING"
+                    },
+                    "generator": {
+                      "properties": {
+                        "avatarUrl": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "displayNameKey": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "id": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "type": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "url": {
+                          "required": false,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "required": false,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "properties": {
+                  "items": {
+                    "properties": {
+                      "key": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "value": {
+                        "required": false,
+                        "type": "any"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "required": false,
+                  "type": "array"
+                },
+                "transition": {
+                  "properties": {
+                    "expand": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "fields": {
+                      "required": false,
+                      "type": "map[STRING]ANY"
+                    },
+                    "hasScreen": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "isAvailable": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "isConditional": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "isGlobal": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "isInitial": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "looped": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "to": {
+                      "properties": {
+                        "description": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "id": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "name": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "scope": {
+                          "properties": {
+                            "project": {
+                              "properties": {
+                                "avatarUrls": {
+                                  "properties": {
+                                    "16x16": {
+                                      "required": false,
+                                      "type": "string"
+                                    },
+                                    "24x24": {
+                                      "required": false,
+                                      "type": "string"
+                                    },
+                                    "32x32": {
+                                      "required": false,
+                                      "type": "string"
+                                    },
+                                    "48x48": {
+                                      "required": false,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "id": {
+                                  "required": false,
+                                  "type": "string"
+                                },
+                                "key": {
+                                  "required": false,
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "required": false,
+                                  "type": "string"
+                                },
+                                "projectCategory": {
+                                  "properties": {
+                                    "description": {
+                                      "required": false,
+                                      "type": "string"
+                                    },
+                                    "id": {
+                                      "required": false,
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "required": false,
+                                      "type": "string"
+                                    },
+                                    "self": {
+                                      "required": false,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "projectTypeKey": {
+                                  "required": false,
+                                  "type": "string"
+                                },
+                                "self": {
+                                  "required": false,
+                                  "type": "string"
+                                },
+                                "simplified": {
+                                  "required": false,
+                                  "type": "boolean"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": {
+                              "required": false,
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "self": {
+                          "required": false,
+                          "type": "string"
+                        },
+                        "statusCategory": {
+                          "properties": {
+                            "colorName": {
+                              "required": false,
+                              "type": "string"
+                            },
+                            "id": {
+                              "required": false,
+                              "type": "integer"
+                            },
+                            "key": {
+                              "required": false,
+                              "type": "string"
+                            },
+                            "name": {
+                              "required": false,
+                              "type": "string"
+                            },
+                            "self": {
+                              "required": false,
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "update": {
+                  "required": false,
+                  "type": "map[STRING]ANY"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "integration": "Jira.jira@v1",
+      "method_hash": "0c6d56c297b3d7fcb5bf34e412f42be6c28c26107d3030ab7a3ac875d7a31deb",
+      "output": {
+        "schema": {
+          "properties": {
+            "id": {
+              "required": false,
+              "type": "string"
+            },
+            "key": {
+              "required": false,
+              "type": "string"
+            },
+            "self": {
+              "required": false,
+              "type": "string"
+            },
+            "transition": {
+              "properties": {
+                "errorCollection": {
+                  "properties": {
+                    "errorMessages": {
+                      "required": false,
+                      "type": "[]STRING"
+                    },
+                    "errors": {
+                      "required": false,
+                      "type": "map[STRING]STRING"
+                    },
+                    "status": {
+                      "required": false,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "required": false,
+                  "type": "integer"
+                },
+                "warningCollection": {
+                  "properties": {
+                    "warnings": {
+                      "required": false,
+                      "type": "[]STRING"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "watchers": {
+              "properties": {
+                "errorCollection": {
+                  "properties": {
+                    "errorMessages": {
+                      "required": false,
+                      "type": "[]STRING"
+                    },
+                    "errors": {
+                      "required": false,
+                      "type": "map[STRING]STRING"
+                    },
+                    "status": {
+                      "required": false,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "required": false,
+                  "type": "integer"
+                },
+                "warningCollection": {
+                  "properties": {
+                    "warnings": {
+                      "required": false,
+                      "type": "[]STRING"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "status": 201
+      },
+      "summary": "Create issue",
+      "type": "method"
+    },
+    "slack.chat.postmessage.create": {
+      "desc": "Sends a message to a channel.",
+      "inputs": [
+        {
+          "token": {
+            "LOCATION": "header",
+            "REQUIRED": true,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "body": {
+            "LOCATION": "body",
+            "REQUIRED": true,
+            "TYPE": "OBJECT",
+            "schema": {
+              "properties": {
+                "as_user": {
+                  "required": false,
+                  "type": "string"
+                },
+                "attachments": {
+                  "required": false,
+                  "type": "string"
+                },
+                "blocks": {
+                  "required": false,
+                  "type": "string"
+                },
+                "channel": {
+                  "required": true,
+                  "type": "string"
+                },
+                "icon_emoji": {
+                  "required": false,
+                  "type": "string"
+                },
+                "icon_url": {
+                  "required": false,
+                  "type": "string"
+                },
+                "link_names": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "mrkdwn": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "parse": {
+                  "required": false,
+                  "type": "string"
+                },
+                "reply_broadcast": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "text": {
+                  "required": false,
+                  "type": "string"
+                },
+                "thread_ts": {
+                  "required": false,
+                  "type": "string"
+                },
+                "unfurl_links": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "unfurl_media": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "username": {
+                  "required": false,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "channel"
+              ]
+            }
+          }
+        }
+      ],
+      "integration": "Slack.slack@1.7.0",
+      "method_hash": "d53342edb87b52dfa401ee6022a1729b6c8c55f9ded49a57bc932aa34a6aec3a",
+      "output": {
+        "schema": {
+          "properties": {
+            "channel": {
+              "required": true,
+              "type": "string"
+            },
+            "message": {
+              "properties": {
+                "attachments": {
+                  "items": {
+                    "properties": {
+                      "fallback": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "id": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "image_bytes": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "image_height": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "image_url": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "image_width": {
+                        "required": false,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "required": false,
+                  "type": "array"
+                },
+                "blocks": {
+                  "items": {
+                    "properties": {
+                      "type": {
+                        "required": true,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "required": false,
+                  "type": "array"
+                },
+                "bot_id": {
+                  "required": false,
+                  "type": "any"
+                },
+                "bot_profile": {
+                  "properties": {
+                    "app_id": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "required": true,
+                      "type": "boolean"
+                    },
+                    "icons": {
+                      "properties": {
+                        "image_36": {
+                          "required": true,
+                          "type": "string"
+                        },
+                        "image_48": {
+                          "required": true,
+                          "type": "string"
+                        },
+                        "image_72": {
+                          "required": true,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "image_36",
+                        "image_48",
+                        "image_72"
+                      ],
+                      "type": "object"
+                    },
+                    "id": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "name": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "team_id": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "updated": {
+                      "required": true,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "app_id",
+                    "deleted",
+                    "icons",
+                    "id",
+                    "name",
+                    "team_id",
+                    "updated"
+                  ],
+                  "type": "object"
+                },
+                "client_msg_id": {
+                  "required": false,
+                  "type": "string"
+                },
+                "comment": {
+                  "properties": {
+                    "comment": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "created": {
+                      "required": true,
+                      "type": "integer"
+                    },
+                    "id": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "is_intro": {
+                      "required": true,
+                      "type": "boolean"
+                    },
+                    "is_starred": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "num_stars": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "pinned_info": {
+                      "properties": {
+                        "value": {
+                          "required": false,
+                          "type": "any"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "pinned_to": {
+                      "required": false,
+                      "type": "[]STRING"
+                    },
+                    "reactions": {
+                      "items": {
+                        "properties": {
+                          "count": {
+                            "required": true,
+                            "type": "integer"
+                          },
+                          "name": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "users": {
+                            "required": true,
+                            "type": "[]STRING"
+                          }
+                        },
+                        "required": [
+                          "count",
+                          "name",
+                          "users"
+                        ],
+                        "type": "object"
+                      },
+                      "required": false,
+                      "type": "array"
+                    },
+                    "timestamp": {
+                      "required": true,
+                      "type": "integer"
+                    },
+                    "user": {
+                      "required": true,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "comment",
+                    "created",
+                    "id",
+                    "is_intro",
+                    "timestamp",
+                    "user"
+                  ],
+                  "type": "object"
+                },
+                "display_as_bot": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "file": {
+                  "properties": {
+                    "channels": {
+                      "required": false,
+                      "type": "[]STRING"
+                    },
+                    "comments_count": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "created": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "date_delete": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "display_as_bot": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "editable": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "editor": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "external_id": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "external_type": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "external_url": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "filetype": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "groups": {
+                      "required": false,
+                      "type": "[]STRING"
+                    },
+                    "has_rich_preview": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "image_exif_rotation": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "ims": {
+                      "required": false,
+                      "type": "[]STRING"
+                    },
+                    "is_external": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "is_public": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "is_starred": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "is_tombstoned": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "last_editor": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "mimetype": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "mode": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "name": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "non_owner_editable": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "num_stars": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "original_h": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "original_w": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "permalink": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "permalink_public": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "pinned_info": {
+                      "properties": {
+                        "value": {
+                          "required": false,
+                          "type": "any"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "pinned_to": {
+                      "required": false,
+                      "type": "[]STRING"
+                    },
+                    "pretty_type": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "preview": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "public_url_shared": {
+                      "required": false,
+                      "type": "boolean"
+                    },
+                    "reactions": {
+                      "items": {
+                        "properties": {
+                          "count": {
+                            "required": true,
+                            "type": "integer"
+                          },
+                          "name": {
+                            "required": true,
+                            "type": "string"
+                          },
+                          "users": {
+                            "required": true,
+                            "type": "[]STRING"
+                          }
+                        },
+                        "required": [
+                          "count",
+                          "name",
+                          "users"
+                        ],
+                        "type": "object"
+                      },
+                      "required": false,
+                      "type": "array"
+                    },
+                    "shares": {
+                      "properties": {
+                        "private": {
+                          "required": false,
+                          "type": "any"
+                        },
+                        "public": {
+                          "required": false,
+                          "type": "any"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "size": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "source_team": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "state": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "thumb_1024": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "thumb_1024_h": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_1024_w": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_160": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "thumb_360": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "thumb_360_h": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_360_w": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_480": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "thumb_480_h": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_480_w": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_64": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "thumb_720": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "thumb_720_h": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_720_w": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_80": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "thumb_800": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "thumb_800_h": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_800_w": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_960": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "thumb_960_h": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_960_w": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "thumb_tiny": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "title": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "updated": {
+                      "required": false,
+                      "type": "integer"
+                    },
+                    "url_private": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "url_private_download": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "user": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "user_team": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "username": {
+                      "required": false,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "files": {
+                  "items": {
+                    "properties": {
+                      "channels": {
+                        "required": false,
+                        "type": "[]STRING"
+                      },
+                      "comments_count": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "created": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "date_delete": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "display_as_bot": {
+                        "required": false,
+                        "type": "boolean"
+                      },
+                      "editable": {
+                        "required": false,
+                        "type": "boolean"
+                      },
+                      "editor": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "external_id": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "external_type": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "external_url": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "filetype": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "groups": {
+                        "required": false,
+                        "type": "[]STRING"
+                      },
+                      "has_rich_preview": {
+                        "required": false,
+                        "type": "boolean"
+                      },
+                      "id": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "image_exif_rotation": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "ims": {
+                        "required": false,
+                        "type": "[]STRING"
+                      },
+                      "is_external": {
+                        "required": false,
+                        "type": "boolean"
+                      },
+                      "is_public": {
+                        "required": false,
+                        "type": "boolean"
+                      },
+                      "is_starred": {
+                        "required": false,
+                        "type": "boolean"
+                      },
+                      "is_tombstoned": {
+                        "required": false,
+                        "type": "boolean"
+                      },
+                      "last_editor": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "mimetype": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "mode": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "name": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "non_owner_editable": {
+                        "required": false,
+                        "type": "boolean"
+                      },
+                      "num_stars": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "original_h": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "original_w": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "permalink": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "permalink_public": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "pinned_info": {
+                        "properties": {
+                          "value": {
+                            "required": false,
+                            "type": "any"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "pinned_to": {
+                        "required": false,
+                        "type": "[]STRING"
+                      },
+                      "pretty_type": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "preview": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "public_url_shared": {
+                        "required": false,
+                        "type": "boolean"
+                      },
+                      "reactions": {
+                        "items": {
+                          "properties": {
+                            "count": {
+                              "required": true,
+                              "type": "integer"
+                            },
+                            "name": {
+                              "required": true,
+                              "type": "string"
+                            },
+                            "users": {
+                              "required": true,
+                              "type": "[]STRING"
+                            }
+                          },
+                          "required": [
+                            "count",
+                            "name",
+                            "users"
+                          ],
+                          "type": "object"
+                        },
+                        "required": false,
+                        "type": "array"
+                      },
+                      "shares": {
+                        "properties": {
+                          "private": {
+                            "required": false,
+                            "type": "any"
+                          },
+                          "public": {
+                            "required": false,
+                            "type": "any"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "size": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "source_team": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "state": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "thumb_1024": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "thumb_1024_h": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_1024_w": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_160": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "thumb_360": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "thumb_360_h": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_360_w": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_480": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "thumb_480_h": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_480_w": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_64": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "thumb_720": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "thumb_720_h": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_720_w": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_80": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "thumb_800": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "thumb_800_h": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_800_w": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_960": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "thumb_960_h": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_960_w": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "thumb_tiny": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "timestamp": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "title": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "updated": {
+                        "required": false,
+                        "type": "integer"
+                      },
+                      "url_private": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "url_private_download": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "user": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "user_team": {
+                        "required": false,
+                        "type": "string"
+                      },
+                      "username": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "required": false,
+                  "type": "array"
+                },
+                "icons": {
+                  "properties": {
+                    "emoji": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "image_64": {
+                      "required": false,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "inviter": {
+                  "required": false,
+                  "type": "string"
+                },
+                "is_delayed_message": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "is_intro": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "is_starred": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "last_read": {
+                  "required": false,
+                  "type": "string"
+                },
+                "latest_reply": {
+                  "required": false,
+                  "type": "string"
+                },
+                "name": {
+                  "required": false,
+                  "type": "string"
+                },
+                "old_name": {
+                  "required": false,
+                  "type": "string"
+                },
+                "parent_user_id": {
+                  "required": false,
+                  "type": "string"
+                },
+                "permalink": {
+                  "required": false,
+                  "type": "string"
+                },
+                "pinned_to": {
+                  "required": false,
+                  "type": "[]STRING"
+                },
+                "purpose": {
+                  "required": false,
+                  "type": "string"
+                },
+                "reactions": {
+                  "items": {
+                    "properties": {
+                      "count": {
+                        "required": true,
+                        "type": "integer"
+                      },
+                      "name": {
+                        "required": true,
+                        "type": "string"
+                      },
+                      "users": {
+                        "required": true,
+                        "type": "[]STRING"
+                      }
+                    },
+                    "required": [
+                      "count",
+                      "name",
+                      "users"
+                    ],
+                    "type": "object"
+                  },
+                  "required": false,
+                  "type": "array"
+                },
+                "reply_count": {
+                  "required": false,
+                  "type": "integer"
+                },
+                "reply_users": {
+                  "required": false,
+                  "type": "[]STRING"
+                },
+                "reply_users_count": {
+                  "required": false,
+                  "type": "integer"
+                },
+                "source_team": {
+                  "required": false,
+                  "type": "string"
+                },
+                "subscribed": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "subtype": {
+                  "required": false,
+                  "type": "string"
+                },
+                "team": {
+                  "required": false,
+                  "type": "string"
+                },
+                "text": {
+                  "required": true,
+                  "type": "string"
+                },
+                "thread_ts": {
+                  "required": false,
+                  "type": "string"
+                },
+                "topic": {
+                  "required": false,
+                  "type": "string"
+                },
+                "ts": {
+                  "required": true,
+                  "type": "string"
+                },
+                "type": {
+                  "required": true,
+                  "type": "string"
+                },
+                "unread_count": {
+                  "required": false,
+                  "type": "integer"
+                },
+                "upload": {
+                  "required": false,
+                  "type": "boolean"
+                },
+                "user": {
+                  "required": false,
+                  "type": "string"
+                },
+                "user_profile": {
+                  "properties": {
+                    "avatar_hash": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "display_name": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "display_name_normalized": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "first_name": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "image_72": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "is_restricted": {
+                      "required": true,
+                      "type": "boolean"
+                    },
+                    "is_ultra_restricted": {
+                      "required": true,
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "real_name": {
+                      "required": true,
+                      "type": "string"
+                    },
+                    "real_name_normalized": {
+                      "required": false,
+                      "type": "string"
+                    },
+                    "team": {
+                      "required": true,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "avatar_hash",
+                    "display_name",
+                    "first_name",
+                    "image_72",
+                    "is_restricted",
+                    "is_ultra_restricted",
+                    "name",
+                    "real_name",
+                    "team"
+                  ],
+                  "type": "object"
+                },
+                "user_team": {
+                  "required": false,
+                  "type": "string"
+                },
+                "username": {
+                  "required": false,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "text",
+                "ts",
+                "type"
+              ],
+              "type": "object"
+            },
+            "ok": {
+              "required": true,
+              "type": "boolean"
+            },
+            "ts": {
+              "required": true,
+              "type": "string"
+            }
+          },
+          "required": [
+            "channel",
+            "message",
+            "ok",
+            "ts"
+          ]
+        },
+        "status": 200
+      },
+      "summary": "Sends a message to a channel.",
+      "type": "method"
+    }
+  },
+  "version": "2.23.7",
+  "workspace": "buildathon"
+}

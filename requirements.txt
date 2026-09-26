@@ -1,0 +1,9 @@
+# DevPilot Dependencies
+langgraph>=1.2.0
+langchain-core>=1.6.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+streamlit>=1.30.0
+swytchcode-runtime>=1.1.0
+requests>=2.30.0
+pytest>=8.0.0
