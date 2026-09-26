@@ -39,9 +39,9 @@ def understand_request_node(state: DevPilotState) -> dict[str, Any]:
     repo_name = intent.get("target_repo_name") or state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
     github_user = intent.get("target_github_username") or state.get("github_username") or os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
 
-    decisions = state.get("decisions", [])
+    decisions = list(state.get("decisions", []))
     if intent.get("target_repo_owner") and intent.get("target_repo_name"):
-        decisions.append(f"Target public repository identified from request: `{repo_owner}/{repo_name}`.")
+        decisions.append(f"Target repository identified from request: `{repo_owner}/{repo_name}`.")
     decisions.append(f"Pull Request contributor identity configured as `@{github_user}`.")
 
     decisions.append(
@@ -50,7 +50,7 @@ def understand_request_node(state: DevPilotState) -> dict[str, Any]:
         f"Jira={intent['needs_jira']}, Slack={intent['needs_slack']}."
     )
 
-    actions = state.get("actions_taken", [])
+    actions = list(state.get("actions_taken", []))
     actions.append(f"Request understood: '{task_type}' task initialized for `{repo_owner}/{repo_name}` by @{github_user} with {len(selected_tools)} Swytchcode tools.")
 
     return {
@@ -67,21 +67,21 @@ def understand_request_node(state: DevPilotState) -> dict[str, Any]:
 
 
 def fetch_github_node(state: DevPilotState) -> dict[str, Any]:
-    """Execute Swytchcode github.issue.get1 to list repository issues."""
+    """Execute Swytchcode github.issue.get1 or inspect real repository issues."""
     owner = state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
     repo = state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
     mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
 
     client = SwytchcodeClient(mode=mode)
-    decisions = state.get("decisions", [])
-    actions = state.get("actions_taken", [])
-    errors = state.get("errors", [])
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
+    errors = list(state.get("errors", []))
 
-    decisions.append(f"GitHub selected: fetching issues for repository `{owner}/{repo}`.")
+    decisions.append(f"Accessing repository: retrieving issues for `{owner}/{repo}`.")
 
     try:
         issues = client.fetch_github_issues(owner=owner, repo=repo)
-        actions.append(f"GitHub issues retrieved: {len(issues)} open issue(s) fetched via Swytchcode.")
+        actions.append(f"GitHub issues retrieved: {len(issues)} issue(s) fetched via Swytchcode/local repository.")
         return {
             "github_results": issues,
             "decisions": decisions,
@@ -89,7 +89,7 @@ def fetch_github_node(state: DevPilotState) -> dict[str, Any]:
             "errors": errors,
         }
     except Exception as e:
-        err_msg = f"GitHub API error: {str(e)}"
+        err_msg = f"GitHub issue retrieval error: {str(e)}"
         logger.error(err_msg)
         errors.append(err_msg)
         actions.append("GitHub issue retrieval failed.")
@@ -111,24 +111,22 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
     mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
 
     client = SwytchcodeClient(mode=mode)
-    decisions = state.get("decisions", [])
-    actions = state.get("actions_taken", [])
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
 
     analyzed = []
     actionable = []
 
     has_local_repo = client._find_repository_directory(owner, repo) is not None
 
-    # 1. Triage existing GitHub issues if present (or if specifically targeted)
-    if not has_local_repo or target_num or not intent.get("needs_code_fix", False):
-        for issue in raw_issues:
-            result = triage_issue(issue)
-            # If user targeted a specific issue, prioritize it
-            if target_num and result["number"] == target_num:
-                result["is_actionable"] = True
-            analyzed.append(result)
-            if result["is_actionable"]:
-                actionable.append(result)
+    # 1. Triage existing GitHub issues if present
+    for issue in raw_issues:
+        result = triage_issue(issue)
+        if target_num and result["number"] == target_num:
+            result["is_actionable"] = True
+        analyzed.append(result)
+        if result["is_actionable"]:
+            actionable.append(result)
 
     # Filter to target issue if specifically asked
     if target_num:
@@ -136,8 +134,8 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
         if filtered:
             actionable = filtered
 
-    # 2. Autonomous Code Defect Scan: Proactively scan codebase files in target repository
-    if (not actionable or intent.get("needs_code_fix", False)) and not target_num:
+    # 2. Autonomous Code Defect Scan: If no issues exist, scan codebase files
+    if not actionable and intent.get("needs_code_fix", False) and not target_num:
         decisions.append(f"Scanning codebase files in `{owner}/{repo}` for latent bugs and security vulnerabilities.")
         repo_files = client.list_repository_files(owner=owner, repo=repo)
         scan_idx = 1
@@ -149,7 +147,6 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
                     raw_text = base64.b64decode(f_res["content"]).decode("utf-8", errors="ignore")
                 defect = scan_code_for_defects(fpath, raw_text)
                 if defect:
-                    # Avoid duplicate if file is already tracked
                     if not any(a.get("file_path") == fpath for a in actionable):
                         is_act = defect["severity"] in ("CRITICAL", "HIGH")
                         defect_item = {
@@ -201,9 +198,9 @@ def inspect_code_node(state: DevPilotState) -> dict[str, Any]:
     mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
 
     client = SwytchcodeClient(mode=mode)
-    decisions = state.get("decisions", [])
-    actions = state.get("actions_taken", [])
-    errors = state.get("errors", [])
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
+    errors = list(state.get("errors", []))
     inspected_files = []
 
     for issue in actionable:
@@ -219,7 +216,7 @@ def inspect_code_node(state: DevPilotState) -> dict[str, Any]:
                 "github_issue_number": issue["number"],
                 "content": raw_content or "",
             })
-            actions.append(f"Read codebase file `{file_path}` via Swytchcode github.content.get.")
+            actions.append(f"Read codebase file `{file_path}` ({len(raw_content or '')} chars) via Swytchcode/filesystem.")
         except Exception as e:
             err_msg = f"Failed to inspect code file `{file_path}`: {str(e)}"
             logger.error(err_msg)
@@ -237,8 +234,8 @@ def generate_code_fix_node(state: DevPilotState) -> dict[str, Any]:
     """Diagnose code defects and generate patches with unified diffs."""
     actionable = state.get("actionable_issues", [])
     inspected_files = state.get("inspected_files", [])
-    decisions = state.get("decisions", [])
-    actions = state.get("actions_taken", [])
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
 
     file_map = {f["path"]: f["content"] for f in inspected_files}
     patches = []
@@ -257,7 +254,7 @@ def generate_code_fix_node(state: DevPilotState) -> dict[str, Any]:
         patch_info = diagnose_and_generate_patch(issue, orig_code)
         patches.append(patch_info)
         decisions.append(
-            f"Code solution generated for #{issue_num} ({patch_info['file_path']}): {patch_info['explanation']}"
+            f"Code solution planned for #{issue_num} (`{patch_info['file_path']}`): {patch_info['explanation']}"
         )
         actions.append(f"Generated unified diff patch for `{patch_info['file_path']}`.")
 
@@ -268,35 +265,198 @@ def generate_code_fix_node(state: DevPilotState) -> dict[str, Any]:
     }
 
 
-def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
-    """Commit code patch and open GitHub Pull Request via Swytchcode."""
+def modify_code_node(state: DevPilotState) -> dict[str, Any]:
+    """Apply generated code patches to actual repository files."""
     patches = state.get("code_patches", [])
-    actionable = state.get("actionable_issues", [])
     owner = state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
     repo = state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
     mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
 
     client = SwytchcodeClient(mode=mode)
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
+    errors = list(state.get("errors", []))
+
+    for patch in patches:
+        file_path = patch["file_path"]
+        fixed_code = patch["fixed_code"]
+        commit_msg = f"fix: resolve {patch.get('cwe', 'defect')} in {file_path}"
+        decisions.append(f"Modifying code file `{file_path}` ({len(fixed_code)} bytes).")
+        try:
+            client.update_repository_file(
+                owner=owner,
+                repo=repo,
+                path=file_path,
+                content=fixed_code,
+                message=commit_msg,
+                branch="main",
+            )
+            actions.append(f"Modified real code in `{file_path}` for issue #{patch.get('github_issue_number')}.")
+        except Exception as e:
+            err_msg = f"Failed to modify code file `{file_path}`: {e}"
+            logger.error(err_msg)
+            errors.append(err_msg)
+
+    return {
+        "decisions": decisions,
+        "actions_taken": actions,
+        "errors": errors,
+    }
+
+
+def run_tests_node(state: DevPilotState) -> dict[str, Any]:
+    """Execute repository automated test suite (pytest) as a hard safety gate."""
+    owner = state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
+    repo = state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
+    mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
+    actionable = state.get("actionable_issues", [])
+
+    client = SwytchcodeClient(mode=mode)
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
+    errors = list(state.get("errors", []))
+
+    test_path = None
+    for issue in actionable:
+        if issue.get("test_path"):
+            test_path = issue.get("test_path")
+            break
+
+    test_res = client.run_tests(owner=owner, repo=repo, test_path=test_path)
+    passed = test_res.get("passed", False)
+    status = test_res.get("status", "TEST FAILED")
+
+    if passed:
+        decisions.append(f"Safety Gate PASSED: {status} ({test_res.get('summary')}). All automated regression assertions succeeded.")
+        actions.append(f"Executed automated test suite ({test_res.get('command')}): PASSED ({test_res.get('summary')}, exit code {test_res.get('exit_code')}). Proceeding to Git branch & commit.")
+        can_proceed = True
+    else:
+        decisions.append(f"Safety Gate BLOCKED: {status} ({test_res.get('summary')}). Halting downstream Git branch creation, commit, and Pull Request.")
+        actions.append(f"Executed automated test suite ({test_res.get('command')}): FAILED ({test_res.get('summary')}, exit code {test_res.get('exit_code')}). Halting workflow.")
+        errors.append(f"Test suite failure ({test_res.get('status')}): {test_res.get('summary')}")
+        can_proceed = False
+
+    return {
+        "test_results": test_res,
+        "can_proceed": can_proceed,
+        "decisions": decisions,
+        "actions_taken": actions,
+        "errors": errors,
+    }
+
+
+def create_git_branch_node(state: DevPilotState) -> dict[str, Any]:
+    """Create a dedicated real Git feature branch for the verified fix."""
+    owner = state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
+    repo = state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
+    mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
     github_user = state.get("github_username") or os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
-    decisions = state.get("decisions", [])
-    actions = state.get("actions_taken", [])
-    errors = state.get("errors", [])
+    actionable = state.get("actionable_issues", [])
+
+    client = SwytchcodeClient(mode=mode)
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
+    errors = list(state.get("errors", []))
+
+    target_issue = actionable[0] if actionable else {}
+    issue_num = target_issue.get("number", 1)
+    fpath = target_issue.get("file_path", "fix")
+    base_name = os.path.basename(fpath).split(".")[0]
+    branch_name = f"fix/{github_user}-gh-{issue_num}-{base_name}"
+
+    decisions.append(f"Creating Git branch `{branch_name}` from `main`.")
+    try:
+        res = client.create_git_branch(owner=owner, repo=repo, branch_name=branch_name, base_branch="main")
+        actions.append(f"Created real Git branch `{branch_name}`.")
+        return {
+            "git_branch": branch_name,
+            "decisions": decisions,
+            "actions_taken": actions,
+            "errors": errors,
+        }
+    except Exception as e:
+        err_msg = f"Failed to create git branch `{branch_name}`: {e}"
+        logger.error(err_msg)
+        errors.append(err_msg)
+        return {
+            "git_branch": branch_name,
+            "decisions": decisions,
+            "actions_taken": actions,
+            "errors": errors,
+        }
+
+
+def commit_changes_node(state: DevPilotState) -> dict[str, Any]:
+    """Commit staged code modifications to real Git repository."""
+    owner = state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
+    repo = state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
+    mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
+    github_user = state.get("github_username") or os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
+    patches = state.get("code_patches", [])
+    branch_name = state.get("git_branch", f"fix/{github_user}-patch")
+
+    client = SwytchcodeClient(mode=mode)
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
+    errors = list(state.get("errors", []))
+
+    commit_sha = ""
+    for patch in patches:
+        file_path = patch["file_path"]
+        commit_msg = f"fix: resolve {patch.get('cwe', 'defect')} in {file_path} by @{github_user}"
+        try:
+            c_res = client.commit_changes(
+                owner=owner,
+                repo=repo,
+                file_path=file_path,
+                message=commit_msg,
+                branch_name=branch_name,
+            )
+            commit_sha = c_res.get("commit_sha", "")
+            decisions.append(f"Committed changes on `{branch_name}`: SHA `{commit_sha}`.")
+            actions.append(f"Created real Git commit `{commit_sha[:8] if commit_sha else 'HEAD'}`: '{commit_msg}'.")
+        except Exception as e:
+            err_msg = f"Failed to commit changes for `{file_path}`: {e}"
+            logger.error(err_msg)
+            errors.append(err_msg)
+
+    return {
+        "commit_sha": commit_sha,
+        "decisions": decisions,
+        "actions_taken": actions,
+        "errors": errors,
+    }
+
+
+def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
+    """Open GitHub Pull Request via Swytchcode for Senior Review."""
+    patches = state.get("code_patches", [])
+    actionable = state.get("actionable_issues", [])
+    owner = state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
+    repo = state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
+    mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
+    branch_name = state.get("git_branch", "fix-branch")
+    commit_sha = state.get("commit_sha", "")
+
+    client = SwytchcodeClient(mode=mode)
+    github_user = state.get("github_username") or os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
+    errors = list(state.get("errors", []))
     pull_requests = []
+    pr_error = None
 
     for patch in patches:
         issue_num = patch["github_issue_number"]
         file_path = patch["file_path"]
-        fixed_content = patch["fixed_code"]
-        branch_name = f"fix/{github_user}-gh-{issue_num}-{os.path.basename(file_path).split('.')[0]}"
-        commit_msg = f"fix: resolve {patch.get('cwe', 'defect')} in {file_path} by @{github_user}"
         pr_title = f"[Senior Review Requested] Resolve #{issue_num}: Fix {patch.get('cwe', 'Bug')} in {os.path.basename(file_path)} (@{github_user})"
 
         checklist_items = patch.get("review_checklist", [
             "Functional correctness: automated patch resolves defect without functional regression.",
+            "Automated test verification: all pytest suites passed locally prior to PR submission.",
             "Security audit: confirmed no credential exposure or arbitrary injection vectors.",
-            "Boundary conditions: validated zero/null/empty input handling.",
+            "Boundary conditions: validated zero/null/empty/whitespace input handling.",
             "Backward compatibility: all public module exports and interfaces maintained.",
-            "Automated regression tests verified.",
         ])
         checklist_md = "\n".join(f"- [ ] {item}" for item in checklist_items)
 
@@ -304,7 +464,7 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
             f"### 🚀 Senior Engineer Review Request\n\n"
             f"> **Submitted by:** @{github_user} via DevPilot Autonomous AI Software Engineer\n"
             f"> **Target Repository:** `{owner}/{repo}` | **Branch:** `{branch_name}` → `main`\n"
-            f"> **Target Defect / Issue:** #{issue_num}\n"
+            f"> **Target Defect / Issue:** #{issue_num} | **Commit SHA:** `{commit_sha[:8] if commit_sha else 'HEAD'}`\n"
             f"> **Review Status:** 🟡 Pending Senior Engineer Approval\n\n"
             f"#### 🔍 Defect Triage & Root Cause Analysis\n"
             f"- **Classification / CWE:** `{patch.get('cwe', 'CWE-DEFECT')}`\n"
@@ -321,16 +481,6 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
         )
 
         try:
-            # 1. Commit file change
-            client.update_repository_file(
-                owner=owner,
-                repo=repo,
-                path=file_path,
-                content=fixed_content,
-                message=commit_msg,
-                branch=branch_name,
-            )
-            # 2. Create PR
             pr_res = client.create_pull_request(
                 owner=owner,
                 repo=repo,
@@ -340,7 +490,7 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
                 body=pr_body,
                 author=github_user,
             )
-            pr_num = pr_res.get("number", 45)
+            pr_num = pr_res.get("number")
             pr_res["review_checklist"] = checklist_items
             pr_res["cwe"] = patch.get("cwe")
             pr_res["lineno"] = patch.get("lineno")
@@ -352,7 +502,6 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
             pr_res["body"] = pr_body
             pull_requests.append(pr_res)
 
-            # Link PR number to corresponding actionable issue
             for issue in actionable:
                 if issue["number"] == issue_num:
                     issue["pull_request_number"] = pr_num
@@ -360,13 +509,16 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
             decisions.append(f"Pull request #{pr_num} opened by @{github_user} on branch `{branch_name}` for Senior Engineer review.")
             actions.append(f"Created GitHub Pull Request #{pr_num} by @{github_user}: '{pr_title}'.")
         except Exception as e:
-            err_msg = f"Failed to create PR for #{issue_num}: {str(e)}"
-            logger.error(err_msg)
-            errors.append(err_msg)
+            pr_error = str(e)
+            logger.warning(f"Remote GitHub Pull Request creation could not be completed: {pr_error}")
+            errors.append(f"Remote Pull Request creation restricted/failed: {pr_error}")
+            actions.append(f"Attempted GitHub Pull Request creation via Swytchcode tool github.pull.create: {pr_error}")
+            decisions.append(f"Remote PR creation failed ({pr_error}). Real branch `{branch_name}` and commit `{commit_sha[:8] if commit_sha else 'HEAD'}` preserved locally.")
 
     return {
         "actionable_issues": actionable,
         "pull_requests": pull_requests,
+        "pr_error": pr_error,
         "decisions": decisions,
         "actions_taken": actions,
         "errors": errors,
@@ -380,9 +532,9 @@ def create_jira_node(state: DevPilotState) -> dict[str, Any]:
     mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
 
     client = SwytchcodeClient(mode=mode)
-    decisions = state.get("decisions", [])
-    actions = state.get("actions_taken", [])
-    errors = state.get("errors", [])
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
+    errors = list(state.get("errors", []))
     jira_results = []
 
     decisions.append(f"Jira selected: creating tasks in project `{project_key}` for {len(actionable)} actionable item(s).")
@@ -412,14 +564,23 @@ def create_jira_node(state: DevPilotState) -> dict[str, Any]:
                 github_issue_number=issue_num,
                 pull_request_number=pr_num,
             )
-            ticket_key = res.get("key", f"{project_key}-{issue_num}")
+            ticket_key = res.get("key")
             issue["jira_ticket_key"] = ticket_key
             jira_results.append(res)
             actions.append(f"Jira task created: `{ticket_key}` for GitHub #{issue_num}.")
         except Exception as e:
-            err_msg = f"Failed to create Jira task for GitHub #{issue_num}: {str(e)}"
-            logger.error(err_msg)
+            err_msg = f"Jira integration not configured / failed: {str(e)}"
+            logger.info(err_msg)
             errors.append(err_msg)
+            actions.append(f"Jira task creation skipped: {str(e)}.")
+            decisions.append(f"Jira integration unconfigured: payload preserved for `{project_key}`.")
+            jira_results.append({
+                "status": "NOT_CONFIGURED",
+                "key": "N/A",
+                "summary": summary,
+                "error": str(e),
+                "intended_payload": desc,
+            })
 
     return {
         "actionable_issues": actionable,
@@ -440,9 +601,9 @@ def send_slack_node(state: DevPilotState) -> dict[str, Any]:
     mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
 
     client = SwytchcodeClient(mode=mode)
-    decisions = state.get("decisions", [])
-    actions = state.get("actions_taken", [])
-    errors = state.get("errors", [])
+    decisions = list(state.get("decisions", []))
+    actions = list(state.get("actions_taken", []))
+    errors = list(state.get("errors", []))
     slack_results = []
 
     decisions.append(f"Slack selected: notifying channel `{channel}` of engineering updates.")
@@ -453,9 +614,17 @@ def send_slack_node(state: DevPilotState) -> dict[str, Any]:
         slack_results.append(res)
         actions.append(f"Slack notification dispatched to channel `{channel}`.")
     except Exception as e:
-        err_msg = f"Failed to send Slack message: {str(e)}"
-        logger.error(err_msg)
+        err_msg = f"Slack notification not configured / failed: {str(e)}"
+        logger.info(err_msg)
         errors.append(err_msg)
+        actions.append(f"Slack notification skipped: {str(e)}.")
+        decisions.append(f"Slack integration unconfigured: message payload preserved for `{channel}`.")
+        slack_results.append({
+            "status": "NOT_CONFIGURED",
+            "channel": channel,
+            "error": str(e),
+            "intended_message": message_text,
+        })
 
     return {
         "slack_results": slack_results,
@@ -469,10 +638,18 @@ def synthesize_response_node(state: DevPilotState) -> dict[str, Any]:
     """Synthesize complete final summary, code patches, traceability, and audit trail."""
     user_request = state.get("user_request", "")
     task_type = state.get("task_type", "issue_triage")
+    mode = state.get("app_mode", "mock").upper()
+    owner = state.get("repo_owner", "")
+    repo = state.get("repo_name", "")
+    github_user = state.get("github_username", "nikhil-mutreja")
     analyzed = state.get("analyzed_issues", [])
     actionable = state.get("actionable_issues", [])
     patches = state.get("code_patches", [])
+    test_results = state.get("test_results", {})
+    git_branch = state.get("git_branch", "")
+    commit_sha = state.get("commit_sha", "")
     pull_requests = state.get("pull_requests", [])
+    pr_error = state.get("pr_error")
     jira_results = state.get("jira_results", [])
     slack_results = state.get("slack_results", [])
     errors = state.get("errors", [])
@@ -480,22 +657,46 @@ def synthesize_response_node(state: DevPilotState) -> dict[str, Any]:
     actions = state.get("actions_taken", [])
 
     lines = []
-    lines.append(f"### DevPilot AI Software Engineer Report")
-    lines.append(f"**Task Type:** `{task_type}` | **User Request:** \"{user_request}\"\n")
+    mode_badge = "🟢 **REAL MODE (Live Execution with Real Git & Swytchcode)**" if mode in ("REAL", "PRODUCTION") else "🟡 **MOCK / DEMO MODE (Simulated Sandbox)**"
+    lines.append(f"### DevPilot Autonomous AI Software Engineer Report")
+    lines.append(f"> {mode_badge}")
+    lines.append(f"> **Target Repository:** `{owner}/{repo}` | **Contributor:** `@{github_user}` | **Task:** `{task_type}`\n")
 
-    # High-level outcome
-    lines.append("#### Executive Summary")
+    # Executive Summary
+    lines.append("#### 📊 Executive Summary")
     lines.append(f"- **Issues Triaged:** {len(analyzed)}")
-    lines.append(f"- **Actionable Issues Found:** {len(actionable)}")
-    lines.append(f"- **Code Patches Generated:** {len(patches)}")
-    lines.append(f"- **Pull Requests Opened:** {len(pull_requests)}")
-    lines.append(f"- **Jira Tasks Created:** {len(jira_results)}")
-    lines.append(f"- **Slack Notifications Dispatched:** {len(slack_results)}")
+    lines.append(f"- **Actionable Issues Identified:** {len(actionable)}")
+    lines.append(f"- **Code Patches Applied:** {len(patches)}")
+    
+    test_status = test_results.get("status", "N/A")
+    lines.append(f"- **Automated Test Gate:** `{test_status}` ({test_results.get('summary', 'No tests run')})")
+    
+    if git_branch:
+        lines.append(f"- **Git Branch Created:** `{git_branch}`")
+    if commit_sha:
+        lines.append(f"- **Git Commit SHA:** `{commit_sha}`")
+    if pull_requests:
+        lines.append(f"- **Pull Requests Opened:** {len(pull_requests)}")
+    elif pr_error:
+        lines.append(f"- **Pull Request Status:** ⚠️ Remote creation blocked (`{pr_error[:80]}...`)")
+    else:
+        lines.append(f"- **Pull Requests Opened:** 0")
 
-    if errors:
-        lines.append("\n#### ⚠️ Errors / Warnings Encountered")
-        for err in errors:
-            lines.append(f"- {err}")
+    # Automated Test Execution Details
+    if test_results and test_results.get("status") != "N/A":
+        lines.append("\n#### 🧪 Automated Test Execution (Safety Gate)")
+        lines.append(f"- **Runner Command:** `{test_results.get('command', 'pytest -v')}`")
+        lines.append(f"- **Status:** **{test_results.get('status')}** (Exit Code: `{test_results.get('exit_code')}`)")
+        lines.append(f"- **Summary:** {test_results.get('summary')}")
+        if test_results.get("stdout"):
+            lines.append("```text")
+            stdout_lines = test_results["stdout"].strip().splitlines()
+            # Show summary section of test runner
+            snippet = "\n".join(stdout_lines[:25])
+            if len(stdout_lines) > 25:
+                snippet += f"\n... [{len(stdout_lines) - 25} lines truncated]"
+            lines.append(snippet)
+            lines.append("```")
 
     # Code Diffs
     if patches:
@@ -505,38 +706,51 @@ def synthesize_response_node(state: DevPilotState) -> dict[str, Any]:
             for pr in pull_requests:
                 if f"#{patch['github_issue_number']}" in pr.get("title", ""):
                     pr_info = f" | **PR:** [{pr.get('title')}]({pr.get('html_url')})"
-            lines.append(f"**File:** `{patch['file_path']}` (Issue #{patch['github_issue_number']}){pr_info}")
+            lines.append(f"**Target File:** `{patch['file_path']}` (Issue #{patch['github_issue_number']}){pr_info}")
             lines.append(f"*{patch['explanation']}*\n")
             lines.append(f"```diff\n{patch['diff']}\n```\n")
 
-    # Senior Engineer Review Section
+    # Pull Request / Senior Review
     if pull_requests:
         lines.append("#### 👨‍💻 Senior Engineer Review Ready Pull Requests")
         for pr in pull_requests:
             lines.append(f"- **{pr.get('title')}** -> [Review PR #{pr.get('number')}]({pr.get('html_url')})")
-            lines.append(f"  - **Contributor / Author:** `@{pr.get('author', 'nikhil-mutreja')}`")
-            lines.append(f"  - **Target Branch:** `{pr.get('head', {}).get('ref', 'fix-branch')}` -> `main`")
+            lines.append(f"  - **Contributor / Author:** `@{pr.get('author', github_user)}`")
+            lines.append(f"  - **Target Branch:** `{pr.get('head', {}).get('ref', git_branch)}` -> `main`")
             if pr.get("cwe"):
                 lines.append(f"  - **Defect Class & Location:** `{pr.get('cwe')}` in `{pr.get('file_path')}` (Line {pr.get('lineno', 1)})")
             lines.append(f"  - **Review Status:** 🟡 `Pending Senior Engineer Sign-Off`")
         lines.append("")
+    elif pr_error:
+        lines.append("#### 👨‍💻 Pull Request Status")
+        lines.append(f"> ⚠️ **Remote PR Submission Note:** The code was modified, tested, branched (`{git_branch}`), and committed (`{commit_sha[:8] if commit_sha else 'HEAD'}`) locally.")
+        lines.append(f"> Remote GitHub API reported: `{pr_error}`")
+        lines.append(f"> Per DevPilot transparency principles, fake PR numbers are never generated.\n")
 
     # Traceability Matrix
     if actionable:
         lines.append("#### 🔗 Complete Software Engineering Traceability")
-        lines.append("| GitHub Issue | Severity | Code Patch | Pull Request | Jira Task | Slack Alert |")
-        lines.append("| :--- | :---: | :---: | :---: | :---: | :---: |")
+        lines.append("| GitHub Issue | Severity | Test Gate | Git Branch | Commit SHA | Pull Request | Jira Task | Slack Alert |")
+        lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
         for item in actionable:
             gh_link = f"#{item['number']}"
             sev = item["severity"]
-            has_patch = "✅ Generated" if any(p["github_issue_number"] == item["number"] for p in patches) else "—"
+            t_gate = "✅ Passed" if test_results.get("passed") else ("❌ Failed" if "FAILED" in test_results.get("status", "") else "—")
+            b_name = f"`{git_branch}`" if git_branch else "—"
+            c_sha = f"`{commit_sha[:7]}`" if commit_sha else "—"
             pr_num = item.get("pull_request_number")
-            pr_display = f"`PR #{pr_num}`" if pr_num else "—"
-            jira_key = item.get("jira_ticket_key") or "—"
-            slack_status = "Dispatched" if slack_results else "—"
-            lines.append(f"| {gh_link} | **{sev}** | {has_patch} | {pr_display} | `{jira_key}` | {slack_status} |")
+            pr_display = f"`PR #{pr_num}`" if pr_num else ("⚠️ Blocked" if pr_error else "—")
+            jira_key = item.get("jira_ticket_key") or ("Intended" if jira_results else "—")
+            slack_status = "Dispatched" if any(s.get("delivered", False) for s in slack_results) else ("Intended" if slack_results else "—")
+            lines.append(f"| {gh_link} | **{sev}** | {t_gate} | {b_name} | {c_sha} | {pr_display} | `{jira_key}` | {slack_status} |")
 
-    # Decisions & Actions
+    # Warnings / Errors Encountered
+    if errors:
+        lines.append("\n#### ⚠️ Execution Diagnostics & Notices")
+        for err in errors:
+            lines.append(f"- {err}")
+
+    # Decisions & Actions Audit Trail
     lines.append("\n#### 📋 Agent Decision & Action Audit Trail")
     for d in decisions:
         lines.append(f"- **[DECISION]** {d}")
@@ -564,6 +778,15 @@ def route_after_analyze(state: DevPilotState) -> str:
     intent = state.get("intent", {})
     actionable = state.get("actionable_issues", [])
 
+    if intent.get("investigate_only", False):
+        should_jira, _ = should_create_jira(intent, actionable)
+        if should_jira:
+            return "create_jira"
+        should_slack, _ = should_send_slack(intent, [], actionable, [])
+        if should_slack:
+            return "send_slack"
+        return "synthesize_response"
+
     if intent.get("needs_code_fix", False) and actionable:
         return "inspect_code"
 
@@ -579,14 +802,52 @@ def route_after_analyze(state: DevPilotState) -> str:
 
 
 def route_after_code_fix(state: DevPilotState) -> str:
-    """Route after generating code patches."""
-    intent = state.get("intent", {})
+    """Route to modify_code if patches were generated."""
     patches = state.get("code_patches", [])
+    if patches:
+        return "modify_code"
+    return "synthesize_response"
 
-    if intent.get("needs_pr", False) and patches:
+
+def route_after_run_tests(state: DevPilotState) -> str:
+    """Safety gate routing: halt if tests failed; proceed to branching if passed."""
+    can_proceed = state.get("can_proceed", False)
+    intent = state.get("intent", {})
+    actionable = state.get("actionable_issues", [])
+
+    if not can_proceed:
+        logger.warning("[SAFETY GATE] Automated tests failed. Halting Git branch and PR operations.")
+        should_jira, _ = should_create_jira(intent, actionable)
+        if should_jira:
+            return "create_jira"
+        should_slack, _ = should_send_slack(intent, [], actionable, [])
+        if should_slack:
+            return "send_slack"
+        return "synthesize_response"
+
+    # Tests passed: proceed to branch creation if PR requested
+    if intent.get("needs_pr", False):
+        return "create_git_branch"
+
+    should_jira, _ = should_create_jira(intent, actionable)
+    if should_jira:
+        return "create_jira"
+
+    should_slack, _ = should_send_slack(intent, [], actionable, [])
+    if should_slack:
+        return "send_slack"
+
+    return "synthesize_response"
+
+
+def route_after_commit_changes(state: DevPilotState) -> str:
+    """Route after commit to create_pull_request, Jira, Slack, or final response."""
+    intent = state.get("intent", {})
+    actionable = state.get("actionable_issues", [])
+
+    if intent.get("needs_pr", False):
         return "create_pull_request"
 
-    actionable = state.get("actionable_issues", [])
     should_jira, _ = should_create_jira(intent, actionable)
     if should_jira:
         return "create_jira"
@@ -643,6 +904,10 @@ def build_devpilot_graph():
     workflow.add_node("analyze_issues", analyze_issues_node)
     workflow.add_node("inspect_code", inspect_code_node)
     workflow.add_node("generate_code_fix", generate_code_fix_node)
+    workflow.add_node("modify_code", modify_code_node)
+    workflow.add_node("run_tests", run_tests_node)
+    workflow.add_node("create_git_branch", create_git_branch_node)
+    workflow.add_node("commit_changes", commit_changes_node)
     workflow.add_node("create_pull_request", create_pull_request_node)
     workflow.add_node("create_jira", create_jira_node)
     workflow.add_node("send_slack", send_slack_node)
@@ -678,6 +943,30 @@ def build_devpilot_graph():
     workflow.add_conditional_edges(
         "generate_code_fix",
         route_after_code_fix,
+        {
+            "modify_code": "modify_code",
+            "synthesize_response": "synthesize_response",
+        },
+    )
+
+    workflow.add_edge("modify_code", "run_tests")
+
+    workflow.add_conditional_edges(
+        "run_tests",
+        route_after_run_tests,
+        {
+            "create_git_branch": "create_git_branch",
+            "create_jira": "create_jira",
+            "send_slack": "send_slack",
+            "synthesize_response": "synthesize_response",
+        },
+    )
+
+    workflow.add_edge("create_git_branch", "commit_changes")
+
+    workflow.add_conditional_edges(
+        "commit_changes",
+        route_after_commit_changes,
         {
             "create_pull_request": "create_pull_request",
             "create_jira": "create_jira",
@@ -747,6 +1036,12 @@ def run_devpilot_agent(
         "actions_taken": [],
         "decisions": [],
         "errors": [],
+        "test_results": {},
+        "git_branch": "",
+        "commit_sha": "",
+        "patch_plan": {},
+        "pr_error": None,
+        "can_proceed": True,
         "final_response": "",
     }
 

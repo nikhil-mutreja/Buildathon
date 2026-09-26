@@ -1,44 +1,51 @@
 # DevPilot — Jury Demo Guide (2.5 Minutes)
 **Track 1: AI Software Engineer — Build with Swytchcode**
 
-This guide provides a concise walkthrough to demonstrate DevPilot to the hackathon jury within the 2.5-minute window.
-
 ---
 
 ## 2.5-Minute Demo Timeline
 
-| Time | Stage | Action / Talking Point | What Judges See |
-| :--- | :--- | :--- | :--- |
-| **0:00 - 0:30** | **The Objective** | Introduce DevPilot as an autonomous **AI Software Engineer** built with LangGraph and Swytchcode. Explain that it does not merely triage issues, but actively **works with code repositories, writes patches, opens Pull Requests, tracks tasks in Jira, and communicates on Slack**. | Streamlit Dashboard header and registered Swytchcode tool capabilities (`github.content.get`, `github.pull.create`, `jira.api.issue.create`, `slack.chat.postmessage.create`). |
-| **0:30 - 1:15** | **Autonomous Coding & PR** | Click **"🛠️ Fix Bug & Open PR"** ("Investigate and fix bug #102: payment gateway 500 error on checkout, open a pull request with the fix, create a Jira task, and notify Slack"). Run the agent. | Agent analyzes the task, inspects `src/services/payment_service.py` via `github.content.get`, diagnoses float precision error, generates Decimal patch, opens PR via `github.pull.create`, creates Jira task, and alerts Slack. |
-| **1:15 - 1:50** | **Code Diff & Traceability** | Navigate to the **"💻 Code Patches & PRs"** tab and **"🔗 Traceability Matrix"** tab. Show the actual syntax-highlighted unified diff and the live PR link. | Unified diff showing exact code changes, clickable Pull Request `#53`, linked Jira task `DEV-202`, and Slack alert. |
-| **1:50 - 2:15** | **Conditional Flexibility** | Click **"📋 Repo Triage & Tracking"** or **"✨ Feature Development"** to demonstrate that the agent adapts dynamically to the developer's instructions instead of following a rigid script. | Agent transitions between task types (`bug_fix`, `feature_development`, `issue_triage`), dynamically adjusting tool selection. |
-| **2:15 - 2:30** | **Wrap Up & Q&A** | Highlight: 100% test coverage (`pytest`), zero hardcoded pipelines, full Swytchcode governance, and production-ready architecture. | Executive Summary tab and clean decision audit trail. |
+| Time | Action | What Judges See |
+| :--- | :--- | :--- |
+| **0:00 - 0:20** | **"This is DevPilot, an autonomous AI Software Engineer."** Explain: it analyzes real repositories, diagnoses bugs, writes code fixes, runs tests, creates branches, commits, and opens PRs — then tracks work in Jira and notifies on Slack. | Clean IDE-like workspace with repository selector, context bar showing repo/branch/author/mode, and "Ready" status. |
+| **0:20 - 0:45** | Click **"🎯 Fix Issue #1 & Create PR"**. This runs on `real_test_repo` — a real Git repository with real code and real failing tests. | Agent execution status expands: "Understanding request..." → "Inspecting repository..." → "Analyzing code..." |
+| **0:45 - 1:15** | Results appear. Show the **execution timeline** on the left — each step the agent took with real data. Point out: "Request understood", "Issue retrieved", "Code inspected", "Fix generated", "Tests executed — all passed", "Branch created", "Changes committed", "PR opened". | Left timeline with ✓ checkmarks. Right panel shows metrics: Issues Analyzed, Bugs Found, Patches, Tests ✅ Passed, PRs, Commit SHA. |
+| **1:15 - 1:35** | Click **"Code Changes"** tab. Show the actual unified diff. Point out: "This is a real code change — not a canned response. The agent read the code, identified the edge case, and generated this fix." | Professional diff view showing the actual patch with root cause explanation. |
+| **1:35 - 1:50** | Click **"Test Results"** tab. Show: "All 3 tests passed. The agent ran pytest on the repository before creating the branch." Then click **"Pull Requests"** tab — show PR number, branch name, commit SHA, and the approval buttons. | Individual test results with ✅ marks. PR card with real data and "Approve & Merge" button. |
+| **1:50 - 2:10** | Switch repository to `ecommerce_service`. Click **"🛡️ Scan & Fix All Bugs"**. Show that the agent autonomously discovers CWE-681 (float precision), CWE-89 (SQL injection), CWE-775 (file descriptor leak) — different bugs in different files, each with its own patch and PR. | Multiple patches, multiple PRs, traceability matrix linking Issue → Patch → Test → Branch → Commit → PR. |
+| **2:10 - 2:30** | Wrap up: **"Every action you saw was real — real Git operations, real test execution, real code analysis. The agent adapts its workflow based on the request. It's not a chatbot — it's an engineer."** | Full traceability matrix at bottom. Audit trail showing every agent decision. |
 
 ---
 
-## Demo Task Prompts
+## Quick Demo Prompts
 
-### 1. Primary Autonomous Coding Workflow (Bug Fix + PR)
+### Primary: Fix Bug + Full Workflow
 ```text
-Investigate and fix bug #102: payment gateway 500 error on checkout, open a pull request with the fix, create a Jira task, and notify Slack.
+Fix issue #1 in test_repositories/real_test_repo, run the tests, and create a pull request authored by @nikhil-mutreja.
 ```
 
-### 2. Security Vulnerability Remediation
+### Security Scan: Multiple Bugs
 ```text
-Remediate critical security vulnerability #101: token leakage in OAuth callback, generate code patch, open PR, track in Jira, and alert the team on Slack.
+Scan test_repositories/ecommerce_service for bugs and security vulnerabilities, fix them, run tests, and create pull requests authored by @nikhil-mutreja.
 ```
 
-### 3. Feature Development
+### Investigate Only (Read-Only)
 ```text
-Implement dark mode theme switcher #105, commit the frontend changes, create a pull request, create a Jira ticket, and notify Slack.
+Analyze issue #1 in test_repositories/real_test_repo. Investigate only — do not modify code or open a PR.
+```
+
+### Full Stack: Fix + Jira + Slack
+```text
+Fix issue #1 in test_repositories/real_test_repo, create a PR, create a Jira task, and notify Slack authored by @nikhil-mutreja.
 ```
 
 ---
 
-## Key Points to Emphasize to Judges
+## Key Points for Judges
 
-1. **Complete Track 1 Alignment**: Automates coding workflows, repository code inspection, issue management, task tracking, and team communication.
-2. **Real Code Artifacts**: Generates real unified diffs and Pull Requests, not just chat text.
-3. **Swytchcode Governance**: Interacts with repository files (`github.content.get`), commits changes (`github.content.update`), creates PRs (`github.pull.create`), creates Jira tasks (`jira.api.issue.create`), and posts Slack messages (`slack.chat.postmessage.create`).
-4. **End-to-End Traceability**: Seamlessly links `GitHub Issue #102` $\rightarrow$ `Code Patch` $\rightarrow$ `Pull Request #45` $\rightarrow$ `Jira DEV-202` $\rightarrow$ `Slack Alert`.
+1. **Real Code Operations**: Reads real files, writes real patches, runs real `pytest`, creates real Git branches and commits with actual SHA hashes.
+2. **Conditional Agent**: Different requests trigger different subsets of the workflow — investigate-only skips code changes; no Jira/Slack unless explicitly requested.
+3. **Test Safety Gate**: Agent blocks PR creation if tests fail — never pushes broken code.
+4. **Transparent Execution**: No fake data. If a GitHub API call fails, it reports the actual error. If tests fail, it shows the failure. If a PR can't be created remotely, it says so honestly.
+5. **Swytchcode Integration**: Uses registered tools `github.issue.get1`, `github.content.get`, `github.content.update`, `github.pull.create`, `jira.api.issue.create`, `slack.chat.postmessage.create`.
+6. **Professional UI**: IDE-like workspace with execution timeline, code diffs, test results, PR review cards, and full traceability matrix.

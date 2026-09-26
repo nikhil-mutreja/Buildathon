@@ -82,4 +82,10 @@ class DevPilotState(TypedDict, total=False):
     actions_taken: list[str]
     decisions: list[str]
     errors: list[str]
+    test_results: dict[str, Any]
+    git_branch: str
+    commit_sha: str
+    patch_plan: dict[str, Any]
+    pr_error: Optional[str]
+    can_proceed: bool
     final_response: str

@@ -7,3 +7,7 @@ streamlit>=1.30.0
 swytchcode-runtime>=1.1.0
 requests>=2.30.0
 pytest>=8.0.0
+
+fastapi>=0.104.0
+uvicorn>=0.24.0
+sse-starlette>=1.6.0

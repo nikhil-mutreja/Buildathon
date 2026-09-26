@@ -1,33 +1,33 @@
 # DevPilot
 
-**Autonomous AI Software Engineering Agent**  
+**Autonomous AI Software Engineering Agent**
 *Buildathon: Build with Swytchcode — Gurgaon Edition (Track 1: AI Software Engineer)*
 
 ---
 
 ## Overview
 
-**DevPilot** is an autonomous AI Software Engineer that automates end-to-end coding workflows, issue management, task tracking, and developer communication. Powered by **LangGraph** and the **Swytchcode Execution Authority**, DevPilot goes beyond simple triage: it understands software engineering tasks, inspects repository source code, diagnoses root causes, generates code fixes and unified diffs, opens GitHub Pull Requests, creates tracked Jira engineering tasks, and broadcasts real-time status alerts on Slack.
+**DevPilot** is an autonomous AI Software Engineer that automates end-to-end coding workflows. Powered by **LangGraph** and the **Swytchcode Execution Authority**, DevPilot inspects real repositories, diagnoses root causes via AST analysis, generates code fixes with unified diffs, runs automated tests as a safety gate, creates Git branches, commits verified changes, opens Pull Requests, tracks work in Jira, and broadcasts alerts on Slack.
 
-Critically, DevPilot operates as a **true autonomous agent**:
-1. Understands natural language development tasks (bug fixes, feature implementations, security remediations, or repo triage).
-2. Autonomously selects only the required tools.
-3. Inspects codebase files and analyzes root causes.
-4. Generates code patches and creates Pull Requests.
-5. Tracks work in Jira with complete bidirectional traceability.
-6. Dispatches actionable Slack alerts to the engineering team.
+### Core Workflow
+
+```
+User Request → Understand → Plan → Inspect Repository → Analyze Code
+    → Generate Fix → Run Tests → Create Branch → Commit → Push
+    → Open PR → Jira Tracking → Slack Notification → Result
+```
 
 ---
 
-## Track 1: Alignment & Objective
+## Track 1: Alignment
 
-| Problem Statement & Objective | DevPilot Implementation |
+| Problem Statement | DevPilot Implementation |
 | :--- | :--- |
-| **Understand Development Tasks** | Natural language intent parser extracts task type (`bug_fix`, `feature_development`, `issue_triage`), target issue number, and required tool actions. |
-| **Work with Code Repositories** | Reads repository source code via `github.content.get`, generates unified diff patches, commits changes via `github.content.update`, and opens Pull Requests via `github.pull.create`. |
-| **Track Issues** | Retrieves and triages GitHub issues (`github.issue.get1`), assesses severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`), and creates tracked Jira tasks (`jira.api.issue.create`). |
-| **Assist Development Teams** | Posts rich Slack alerts (`slack.chat.postmessage.create`) detailing the root cause, Pull Request link for review, and Jira ticket key. |
-| **Automate Coding Workflows** | Seamless end-to-end loop: Task Request → Code Inspection → Patch Generation → Pull Request → Jira Task → Slack Broadcast. |
+| **Understand Development Tasks** | NLP intent parser extracts task type, target issue, and required tools from natural language. |
+| **Work with Code Repositories** | Reads real code via `github.content.get`, generates patches, commits via Git, opens PRs via `github.pull.create`. |
+| **Run Tests** | Executes `pytest` as a safety gate — blocks PR creation if tests fail. |
+| **Track Issues** | Retrieves and triages GitHub issues, creates Jira tasks via `jira.api.issue.create`. |
+| **Assist Development Teams** | Posts Slack alerts via `slack.chat.postmessage.create` with PR links and Jira tickets. |
 
 ---
 
@@ -35,185 +35,122 @@ Critically, DevPilot operates as a **true autonomous agent**:
 
 ```mermaid
 flowchart TD
-    User([Developer / Hackathon Jury]) -->|Natural Language Request| UI[Streamlit Interface]
-    UI -->|Invoke Agent| Agent[LangGraph StateGraph Engine]
+    User([Developer]) -->|Request| UI[Streamlit / FastAPI]
+    UI -->|Execute| Agent[LangGraph StateGraph]
 
-    subgraph Autonomous AI Software Engineer
-        Agent --> Understand[1. Understand Request & Task Type]
-        Understand --> Route1{Requires GitHub Issues?}
-        Route1 -->|Yes| FetchGH[2. Swytchcode: Fetch Issues]
-        Route1 -->|No| Synth[7. Synthesize Report & Diff View]
-
-        FetchGH --> Triage[3. Triage & Map Code Files]
-        Triage --> Route2{Requires Code Fix?}
-
-        Route2 -->|Yes| InspectCode[4. Swytchcode: Read Codebase Files]
-        InspectCode --> GenPatch[Generate Patch & Unified Diff]
-        GenPatch --> Route3{Open Pull Request?}
-        Route3 -->|Yes| OpenPR[5. Swytchcode: Commit & Open PR]
-        Route3 -->|No| Route4{Requires Jira?}
-
-        Route2 -->|No| Route4
-        OpenPR --> Route4
-
-        Route4 -->|Yes| JiraNode[6. Swytchcode: Create Jira Tasks]
-        Route4 -->|No| Route5{Requires Slack?}
-
-        JiraNode --> Route5
-        Route5 -->|Yes| SlackNode[7. Swytchcode: Post Slack Alert]
-        Route5 -->|No| Synth
-
-        SlackNode --> Synth
+    subgraph "AI Software Engineer"
+        Agent --> Understand["Understand Request"]
+        Understand --> Fetch["Fetch GitHub Issues"]
+        Fetch --> Analyze["Analyze & Triage"]
+        Analyze --> Inspect["Inspect Code"]
+        Inspect --> Fix["Generate Code Fix"]
+        Fix --> Modify["Apply Patch"]
+        Modify --> Test["Run Tests (Safety Gate)"]
+        Test -->|Pass| Branch["Create Git Branch"]
+        Test -->|Fail| Halt["Halt — Report Failure"]
+        Branch --> Commit["Commit Changes"]
+        Commit --> PR["Open Pull Request"]
+        PR --> Jira["Create Jira Task"]
+        Jira --> Slack["Notify Slack"]
+        Slack --> Report["Synthesize Report"]
     end
 
-    subgraph Swytchcode Execution Layer
-        FetchGH -.->|github.issue.get1| SwyKernel[Swytchcode Runtime]
-        InspectCode -.->|github.content.get| SwyKernel
-        OpenPR -.->|github.content.update / github.pull.create| SwyKernel
-        JiraNode -.->|jira.api.issue.create| SwyKernel
-        SlackNode -.->|slack.chat.postmessage.create| SwyKernel
-        SwyKernel -.-> ExternalAPIs[Production APIs: GitHub / Jira / Slack]
+    subgraph "Swytchcode Execution Layer"
+        Fetch -.->|github.issue.get1| SWY[Swytchcode Runtime]
+        Inspect -.->|github.content.get| SWY
+        Modify -.->|github.content.update| SWY
+        PR -.->|github.pull.create| SWY
+        Jira -.->|jira.api.issue.create| SWY
+        Slack -.->|slack.chat.postmessage.create| SWY
     end
 
-    Synth --> Output([Executive Report, Code Diffs, & Traceability Matrix])
-    Output --> UI
+    Report --> Output([Results & Traceability])
 ```
 
 ---
 
 ## Key Features
 
-- **Automated Coding Workflows**: Not just issue triage—reads source files, diagnoses defects, generates unified diffs, and opens Pull Requests.
-- **Swytchcode Execution Layer**: Integrates schema-validated tools for GitHub, Jira, and Slack registered in `.swytchcode/tooling.json`.
-- **True Conditional Orchestration**: Avoids fixed linear pipelines. Prompts only requesting triage don't generate PRs; coding tasks trigger the full code-inspection and PR loop.
-- **Complete End-to-End Traceability**: Links `GitHub Issue #102` $\rightarrow$ `Code Patch` $\rightarrow$ `Pull Request #45` $\rightarrow$ `Jira DEV-202` $\rightarrow$ `Slack Alert`.
-- **Dual Execution Modes**:
-  - `REAL MODE`: Connects to live Swytchcode runtime and external APIs.
-  - `DEMO / MOCK MODE`: Full-fidelity offline simulation for testing without third-party credential dependencies.
-- **Interactive Streamlit Dashboard**: Clean UI with quick-launch tasks (Bug Fix + PR, Security Remediation, Feature Development, Repo Triage), live metrics, diff viewers, and audit logs.
+- **Real Code Operations**: Reads real source files, writes real patches, runs real `pytest`, creates real Git branches with actual commit SHAs.
+- **Test Safety Gate**: Blocks PR creation when tests fail — never pushes broken code.
+- **Conditional Agent**: Different requests trigger different workflow paths. Investigate-only skips code changes; Jira/Slack only when explicitly requested.
+- **AST-Based Defect Scanner**: Detects CWE-681 (float precision), CWE-89 (SQL injection), CWE-532 (credential logging), CWE-775 (resource leaks), PEP-484 (mutable defaults).
+- **End-to-End Traceability**: Links Issue → Patch → Tests → Branch → Commit → PR → Jira → Slack.
+- **Premium UI**: IDE-like workspace with execution timeline, code diff viewer, test results, PR review cards, and audit trail.
+- **Dual Execution Modes**: Real mode (live Git + Swytchcode) and Demo mode (offline simulation).
 
 ---
 
 ## Swytchcode Integrations
 
-DevPilot utilizes canonical Swytchcode tools registered in `.swytchcode/tooling.json`:
-
-| Provider | Canonical Tool ID | Role in DevPilot |
+| Provider | Tool ID | Role |
 | :--- | :--- | :--- |
-| **GitHub** | `github.issue.get1` | Retrieves open repository issues and PRs |
-| **GitHub** | `github.content.get` | Reads repository source code files for root-cause inspection |
-| **GitHub** | `github.content.update` | Commits code patches to branches |
-| **GitHub** | `github.pull.create` | Opens Pull Requests linking the target issue |
-| **Jira** | `jira.api.issue.create` | Generates tracked tasks linking GitHub issue and PR |
-| **Slack** | `slack.chat.postmessage.create` | Broadcasts alerts with PR links and Jira tickets |
+| **GitHub** | `github.issue.get1` | Retrieve open issues |
+| **GitHub** | `github.content.get` | Read source code files |
+| **GitHub** | `github.content.update` | Commit code patches |
+| **GitHub** | `github.pull.create` | Open Pull Requests |
+| **Jira** | `jira.api.issue.create` | Create tracked tasks |
+| **Slack** | `slack.chat.postmessage.create` | Send team alerts |
 
 ---
 
 ## Tech Stack
 
-- **Agent Framework**: LangGraph (`StateGraph`, conditional edge routing)
-- **Execution Authority**: Swytchcode (`swytchcode-runtime` Python SDK & `swy` CLI kernel)
-- **Data Validation & State**: Pydantic v2 & Python `TypedDict`
-- **User Interface**: Streamlit 1.64
+- **Agent**: LangGraph (StateGraph, conditional routing)
+- **Execution**: Swytchcode Runtime
+- **UI**: Streamlit 1.64
+- **API**: FastAPI + SSE (Server-Sent Events)
+- **Validation**: Pydantic v2
 - **Testing**: Pytest 9.1
-- **Language / Environment**: Python 3.12, Linux
+- **Language**: Python 3.12
 
 ---
 
 ## Setup
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+ (for Swytchcode CLI)
-
-### Installation
-
-1. **Navigate to the workspace:**
-   ```bash
-   cd /home/nikhil-mutreja/buildathon
-   ```
-
-2. **Activate the virtual environment:**
-   ```bash
-   source .venv/bin/activate
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
----
-
-## Environment Variables
-
-Copy `.env.example` to `.env`:
 ```bash
-cp .env.example .env
+cd /home/nikhil-mutreja/buildathon
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
-
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `APP_MODE` | Application mode: `mock` (demo simulation) or `real` (live Swytchcode) | `mock` |
-| `SWYTCHCODE_TOKEN` | Swytchcode service token for managed execution | Optional in mock mode |
-| `GITHUB_TOKEN` | GitHub Personal Access Token | Optional in mock mode |
-| `GITHUB_REPO_OWNER` | Target GitHub repository owner / org | `octocat` |
-| `GITHUB_REPO_NAME` | Target GitHub repository name | `Hello-World` |
-| `JIRA_PROJECT_KEY` | Target Jira project key | `DEV` |
-| `SLACK_CHANNEL` | Target Slack alert channel | `#dev-alerts` |
-
----
 
 ## Running
 
-Launch the Streamlit demonstration dashboard:
+### Streamlit UI
 ```bash
 streamlit run app/ui/streamlit_app.py
 ```
-Open your browser at `http://localhost:8501`.
+
+### FastAPI Backend (optional)
+```bash
+uvicorn app.api.server:app --host 0.0.0.0 --port 8000
+```
 
 ---
 
-## Example Tasks & Prompts
+## Test Repositories
 
-### 1. Autonomous Bug Fix & Pull Request
-> *"Investigate and fix bug #102: payment gateway 500 error on checkout, open a pull request with the fix, create a Jira task, and notify Slack."*
-- **Path**: Understand $\rightarrow$ Fetch GitHub Issue $\rightarrow$ Inspect `src/services/payment_service.py` $\rightarrow$ Generate Decimal arithmetic patch $\rightarrow$ Open PR $\rightarrow$ Create Jira `DEV-202` $\rightarrow$ Post Slack Alert.
-
-### 2. Security Vulnerability Remediation
-> *"Remediate critical security vulnerability #101: token leakage in OAuth callback, generate code patch, open PR, track in Jira, and alert the team on Slack."*
-- **Path**: Inspect `src/auth/oauth_handler.py` $\rightarrow$ Generate token masking patch $\rightarrow$ Open PR $\rightarrow$ Create Jira `DEV-201` $\rightarrow$ Post Slack Alert.
-
-### 3. Feature Development
-> *"Implement dark mode theme switcher #105, commit the frontend changes, create a pull request, create a Jira ticket, and notify Slack."*
-- **Path**: Inspect `src/components/ThemeToggle.tsx` $\rightarrow$ Generate theme persistence patch $\rightarrow$ Open PR $\rightarrow$ Create Jira `DEV-205` $\rightarrow$ Post Slack Alert.
-
-### 4. Issue Triage & Backlog Sync
-> *"Analyze latest GitHub repository issues, identify critical items, create Jira tasks, and notify the team on Slack."*
-- **Path**: Fetch Issues $\rightarrow$ Triage Severities $\rightarrow$ Create Jira Tasks $\rightarrow$ Notify Slack.
+| Repository | Defects | Tests |
+| :--- | :--- | :--- |
+| `real_test_repo` | Greeter edge-case (empty/whitespace name) | ✅ 3 tests |
+| `ecommerce_service` | CWE-681, CWE-89, CWE-775 | ✅ Tests included |
+| `auth_microservice` | CWE-532, PEP-484 | ✅ Tests included |
+| `realtime_stream_service` | CWE-775 (connection pool) | — |
 
 ---
 
 ## Testing
 
-Run the automated test suite with pytest:
 ```bash
 pytest -v
 ```
 
-The test suite validates:
-1. Tool selection and task intent mapping (`bug_fix`, `feature_development`, `issue_triage`)
-2. Severity triage classification (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`)
-3. Code patch generation and unified diff syntax
-4. Full autonomous coding workflow (Issue $\rightarrow$ Code Fix $\rightarrow$ PR $\rightarrow$ Jira $\rightarrow$ Slack)
-5. Conditional skipping: GitHub-only workflow
-6. Conditional skipping: GitHub + Jira workflow
-7. Mock client capability and interface parity
-
----
-
-## Limitations
-
-- **Rate Limits**: In live mode, GitHub and Jira rate limits apply based on the connected account's quota.
-- **Complex Multi-file Refactoring**: Single-task fixes focus on the primary offending file identified during codebase inspection.
-- **Jira Permissions**: Issue creation requires create permissions on the target Jira project key.
+**23 tests** covering:
+- Intent parsing and tool selection
+- Severity triage classification
+- Code patch generation and unified diff
+- Full autonomous workflow (Issue → Fix → Tests → PR → Jira → Slack)
+- Real-mode end-to-end lifecycle
+- Safety gate (test failure blocks PR)
+- Investigate-only mode
+- Multi-repository isolation

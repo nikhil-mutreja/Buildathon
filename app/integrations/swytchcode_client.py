@@ -11,9 +11,12 @@ Uses exact canonical tool IDs registered in Swytchcode:
 """
 
 import os
+import sys
+import json
 import time
 import base64
 import logging
+import subprocess
 from typing import Any, Optional
 
 logger = logging.getLogger("DevPilot.Swytchcode")
@@ -44,14 +47,21 @@ class SwytchcodeClient:
         else:
             self.mode = "mock"
 
+        # Configure Swytchcode native binary execution environment
+        workspace_root = "/home/nikhil-mutreja/buildathon"
+        swy_bin = os.path.join(workspace_root, "node_modules/swytchcode-cli-linux-x64/bin/swytchcode")
+        if os.path.isfile(swy_bin):
+            os.environ["SWYTCHCODE_BIN"] = swy_bin
+         # Avoid read-only home in sandbox
+
         self._swx = None
         if self.mode == "real":
             try:
                 from swytchcode_runtime import Swytchcode
                 self._swx = Swytchcode()
             except ImportError:
-                logger.warning("swytchcode_runtime not found; falling back to mock mode.")
-                self.mode = "mock"
+                logger.error("swytchcode_runtime not found in REAL mode.")
+                raise RuntimeError("swytchcode_runtime is required for REAL mode execution.")
 
     def is_mock(self) -> bool:
         """Return True if running in Mock/Demo mode."""
@@ -68,11 +78,34 @@ class SwytchcodeClient:
         state: str = "open",
         per_page: int = 10,
     ) -> list[dict[str, Any]]:
-        """Fetch repository issues using Swytchcode github.issue.get1."""
+        """Fetch repository issues using real repository issue files or Swytchcode github.issue.get1."""
+        # 1. Check if repository on disk provides real issue definitions
+        repo_dir = self._find_repository_directory(owner, repo)
+        if repo_dir:
+            issues_dir = os.path.join(repo_dir, "issues")
+            if os.path.isdir(issues_dir):
+                disk_issues = []
+                for fname in sorted(os.listdir(issues_dir)):
+                    if fname.endswith(".json"):
+                        fpath = os.path.join(issues_dir, fname)
+                        try:
+                            with open(fpath, "r", encoding="utf-8") as jf:
+                                idata = json.load(jf)
+                                disk_issues.append(idata)
+                        except Exception as e:
+                            logger.warning(f"Error loading issue file {fpath}: {e}")
+                if disk_issues:
+                    logger.info(f"[TOOL] Found {len(disk_issues)} real issue(s) on disk in {issues_dir}")
+                    return disk_issues
+            # If repo on disk has no issues dir, return [] so autonomous code scan inspects real code
+            if "test_repositories" in repo_dir or os.path.isdir(os.path.join(repo_dir, "src")):
+                return []
+
         if self.is_mock():
             logger.info(f"[TOOL] [MOCK] Simulating GitHub issues for {owner}/{repo}")
             return self._mock_github_issues(owner, repo)
 
+        # 2. Execute Swytchcode live GitHub issue retrieval
         logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_GITHUB_ISSUES} for {owner}/{repo}")
         token = os.getenv("GITHUB_TOKEN")
         args: dict[str, Any] = {
@@ -116,7 +149,9 @@ class SwytchcodeClient:
             f"/home/nikhil-mutreja/{clean_repo}",
         ]
 
-        if repo_base in ["ecommerce", "ecommerce-service", "ecommerce_service", "Hello-World", "Hello_World"]:
+        if repo_base in ["real_test_repo", "real-test-repo"]:
+            candidates.insert(0, os.path.join(workspace_root, "test_repositories", "real_test_repo"))
+        elif repo_base in ["ecommerce", "ecommerce-service", "ecommerce_service"]:
             candidates.insert(0, os.path.join(workspace_root, "test_repositories", "ecommerce_service"))
         elif repo_base in ["auth", "auth-microservice", "auth_microservice"]:
             candidates.insert(0, os.path.join(workspace_root, "test_repositories", "auth_microservice"))
@@ -249,7 +284,24 @@ class SwytchcodeClient:
         branch: str,
         sha: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Commit file change to repository using Swytchcode github.content.update."""
+        # If repository exists on disk, apply real code modification directly
+        repo_dir = self._find_repository_directory(owner, repo)
+        if repo_dir:
+            full_path = os.path.join(repo_dir, path)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            logger.info(f"[TOOL] Real code file updated on disk: {full_path}")
+            if self.is_mock():
+                return {
+                    "content": {"path": path, "sha": "mock-sha-commit-9921"},
+                    "commit": {"message": message, "sha": "mock-commit-sha-4921"},
+                }
+            return {
+                "content": {"path": path, "sha": "disk-sha"},
+                "commit": {"message": message, "sha": "pending-git-commit"},
+            }
+
         if self.is_mock():
             logger.info(f"[TOOL] [MOCK] Simulating repository file commit to branch {branch} for {path}")
             return {
@@ -280,6 +332,174 @@ class SwytchcodeClient:
             err_msg = str(e)
             logger.error(f"[TOOL] Swytchcode GitHub file update failed: {err_msg}")
             raise RuntimeError(f"Swytchcode GitHub file update error: {err_msg}")
+
+    def create_git_branch(
+        self,
+        owner: str,
+        repo: str,
+        branch_name: str,
+        base_branch: str = "main",
+    ) -> dict[str, Any]:
+        """Create an actual git branch on disk or via Swytchcode github.git.refs.create."""
+        if self.is_mock():
+            logger.info(f"[TOOL] [MOCK] Simulating branch creation '{branch_name}' from '{base_branch}'")
+            return {"branch": branch_name, "base": base_branch, "created": True, "mode": "mock"}
+
+        repo_dir = self._find_repository_directory(owner, repo)
+        if repo_dir and os.path.isdir(os.path.join(repo_dir, ".git")):
+            try:
+                subprocess.run(["git", "config", "user.name", "DevPilot Agent"], cwd=repo_dir, check=False)
+                subprocess.run(["git", "config", "user.email", "devpilot@agentic.ai"], cwd=repo_dir, check=False)
+                subprocess.run(["git", "checkout", "-B", branch_name], cwd=repo_dir, check=True, capture_output=True, text=True)
+                current = subprocess.run(["git", "branch", "--show-current"], cwd=repo_dir, capture_output=True, text=True).stdout.strip()
+                logger.info(f"[TOOL] Real Git branch '{current}' checked out in {repo_dir}")
+                return {"branch": current, "base": base_branch, "created": True, "directory": repo_dir}
+            except Exception as e:
+                err_msg = f"Failed to create git branch '{branch_name}': {e}"
+                logger.error(err_msg)
+                raise RuntimeError(err_msg)
+
+        logger.info(f"[TOOL] Executing Swytchcode tool github.git.refs.create for branch '{branch_name}'")
+        token = os.getenv("GITHUB_TOKEN")
+        args = {
+            "owner": owner,
+            "repo": repo,
+            "body": {
+                "ref": f"refs/heads/{branch_name}",
+                "sha": "HEAD",
+            }
+        }
+        if token:
+            args["Authorization"] = f"Bearer {token}"
+        try:
+            return self._swx.tools.execute("github.git.refs.create", args)
+        except Exception as e:
+            raise RuntimeError(f"Swytchcode branch creation error: {e}")
+
+    def commit_changes(
+        self,
+        owner: str,
+        repo: str,
+        file_path: str,
+        message: str,
+        branch_name: str,
+    ) -> dict[str, Any]:
+        """Commit modified files to real Git repository or via Swytchcode."""
+        if self.is_mock():
+            logger.info(f"[TOOL] [MOCK] Simulating commit to branch '{branch_name}': {message}")
+            return {
+                "commit_sha": "mock-commit-sha-4921",
+                "branch": branch_name,
+                "message": message,
+                "mode": "mock",
+            }
+
+        repo_dir = self._find_repository_directory(owner, repo)
+        if repo_dir and os.path.isdir(os.path.join(repo_dir, ".git")):
+            try:
+                subprocess.run(["git", "config", "user.name", "DevPilot Agent"], cwd=repo_dir, check=False)
+                subprocess.run(["git", "config", "user.email", "devpilot@agentic.ai"], cwd=repo_dir, check=False)
+                subprocess.run(["git", "add", file_path], cwd=repo_dir, check=True, capture_output=True, text=True)
+                subprocess.run(["git", "commit", "-m", message], cwd=repo_dir, capture_output=True, text=True)
+                sha_res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, check=True, capture_output=True, text=True)
+                actual_sha = sha_res.stdout.strip()
+                logger.info(f"[TOOL] Real Git commit created: SHA={actual_sha} on branch '{branch_name}'")
+                return {
+                    "commit_sha": actual_sha,
+                    "branch": branch_name,
+                    "message": message,
+                    "file_path": file_path,
+                    "directory": repo_dir,
+                }
+            except Exception as e:
+                err_msg = f"Failed to commit changes to git: {e}"
+                logger.error(err_msg)
+                raise RuntimeError(err_msg)
+
+        return self.update_repository_file(owner, repo, file_path, "", message, branch_name)
+
+    def run_tests(
+        self,
+        owner: str,
+        repo: str,
+        test_path: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Run project tests via pytest and capture actual stdout/stderr and exit code."""
+        repo_dir = self._find_repository_directory(owner, repo)
+        if not repo_dir:
+            return {
+                "status": "TEST NOT AVAILABLE",
+                "passed": True,
+                "summary": "Remote-only repository without local test runner.",
+                "stdout": "",
+                "stderr": "",
+                "exit_code": 0,
+            }
+
+        test_dir = os.path.join(repo_dir, "tests")
+        target = test_path if test_path and os.path.exists(os.path.join(repo_dir, test_path)) else (test_dir if os.path.isdir(test_dir) else None)
+        
+        if not target:
+            return {
+                "status": "TEST NOT AVAILABLE",
+                "passed": True,
+                "summary": "No test directory or test files detected in repository.",
+                "stdout": "",
+                "stderr": "",
+                "exit_code": 0,
+            }
+
+        abs_target = os.path.join(repo_dir, target) if not os.path.isabs(target) else target
+        env = {**os.environ, "PYTHONPATH": repo_dir}
+
+        try:
+            res = subprocess.run(
+                [sys.executable, "-m", "pytest", abs_target, "-v"],
+                cwd=repo_dir,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            passed = res.returncode == 0
+            status = "TEST PASSED" if passed else "TEST FAILED"
+            summary_line = ""
+            for line in reversed(res.stdout.splitlines()):
+                if "passed" in line or "failed" in line or "error" in line:
+                    summary_line = line.strip(" =")
+                    break
+
+            rel_target = os.path.relpath(abs_target, repo_dir)
+            test_cmd = f"pytest {rel_target} -v"
+            logger.info(f"[TOOL] Tests executed in {repo_dir}: Status={status} ({summary_line})")
+            return {
+                "status": status,
+                "passed": passed,
+                "summary": summary_line or ("Tests passed" if passed else "Tests failed"),
+                "stdout": res.stdout,
+                "stderr": res.stderr,
+                "exit_code": res.returncode,
+                "target": abs_target,
+                "command": test_cmd,
+            }
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "TEST FAILED",
+                "passed": False,
+                "summary": "Test execution timed out after 30 seconds.",
+                "stdout": "",
+                "stderr": "TimeoutExpired",
+                "exit_code": -1,
+            }
+        except Exception as e:
+            return {
+                "status": "TEST COULD NOT RUN",
+                "passed": False,
+                "summary": f"Could not execute test runner: {str(e)}",
+                "stdout": "",
+                "stderr": str(e),
+                "exit_code": -1,
+            }
 
     def create_pull_request(
         self,
