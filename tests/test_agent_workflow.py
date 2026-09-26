@@ -333,3 +333,24 @@ def test_scan_code_for_defects_detection():
     assert d3["cwe"] == "CWE-775"
 
 
+def test_public_repo_analysis_and_pr_for_username_nikhil_mutreja():
+    """Verify public repo analysis, defect discovery, and PR authorship for nikhil-mutreja."""
+    user_prompt = (
+        "Check public repository https://github.com/octocat/Hello-World, "
+        "analyze the complete repo, find the bug in it, fix it, and open a pull request "
+        "for github account username :- nikhil-mutreja"
+    )
+    state = run_devpilot_agent(user_prompt, app_mode="mock")
+    assert state["repo_owner"] == "octocat"
+    assert state["repo_name"] == "Hello-World"
+    assert state["github_username"] == "nikhil-mutreja"
+    assert len(state["actionable_issues"]) >= 1
+    assert len(state["code_patches"]) >= 1
+    assert len(state["pull_requests"]) >= 1
+    for pr in state["pull_requests"]:
+        assert pr["user"]["login"] == "nikhil-mutreja"
+        assert "fix/nikhil-mutreja-" in pr["head"]["ref"]
+        assert "nikhil-mutreja" in pr["title"]
+
+
+

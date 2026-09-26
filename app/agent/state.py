@@ -67,6 +67,7 @@ class DevPilotState(TypedDict, total=False):
     selected_tools: list[str]
     repo_owner: str
     repo_name: str
+    github_username: str
     jira_project: str
     slack_channel: str
     app_mode: str  # 'real' or 'mock'

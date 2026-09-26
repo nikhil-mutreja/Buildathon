@@ -37,10 +37,12 @@ def understand_request_node(state: DevPilotState) -> dict[str, Any]:
 
     repo_owner = intent.get("target_repo_owner") or state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
     repo_name = intent.get("target_repo_name") or state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
+    github_user = intent.get("target_github_username") or state.get("github_username") or os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
 
     decisions = state.get("decisions", [])
     if intent.get("target_repo_owner") and intent.get("target_repo_name"):
         decisions.append(f"Target public repository identified from request: `{repo_owner}/{repo_name}`.")
+    decisions.append(f"Pull Request contributor identity configured as `@{github_user}`.")
 
     decisions.append(
         f"Task categorized as `{task_type}`. Intent: GitHub={intent['needs_github']}, "
@@ -49,11 +51,12 @@ def understand_request_node(state: DevPilotState) -> dict[str, Any]:
     )
 
     actions = state.get("actions_taken", [])
-    actions.append(f"Request understood: '{task_type}' task initialized for `{repo_owner}/{repo_name}` with {len(selected_tools)} Swytchcode tools.")
+    actions.append(f"Request understood: '{task_type}' task initialized for `{repo_owner}/{repo_name}` by @{github_user} with {len(selected_tools)} Swytchcode tools.")
 
     return {
         "repo_owner": repo_owner,
         "repo_name": repo_name,
+        "github_username": github_user,
         "task_type": task_type,
         "intent": intent,
         "selected_tools": selected_tools,
@@ -259,6 +262,7 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
     mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
 
     client = SwytchcodeClient(mode=mode)
+    github_user = state.get("github_username") or os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
     decisions = state.get("decisions", [])
     actions = state.get("actions_taken", [])
     errors = state.get("errors", [])
@@ -268,17 +272,20 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
         issue_num = patch["github_issue_number"]
         file_path = patch["file_path"]
         fixed_content = patch["fixed_code"]
-        branch_name = f"fix/gh-{issue_num}-{os.path.basename(file_path).split('.')[0]}"
-        commit_msg = f"fix: resolve GitHub issue #{issue_num} in {file_path}"
-        pr_title = f"[DevPilot Fix] Resolve #{issue_num} in {file_path}"
+        branch_name = f"fix/{github_user}-gh-{issue_num}-{os.path.basename(file_path).split('.')[0]}"
+        commit_msg = f"fix: resolve issue #{issue_num} in {file_path} by @{github_user}"
+        pr_title = f"[DevPilot Fix by @{github_user}] Resolve #{issue_num} in {file_path}"
         pr_body = (
             f"### Automated Pull Request by DevPilot AI Software Engineer\n\n"
-            f"**Target Issue:** #{issue_num}\n"
+            f"**Author / Contributor:** @{github_user}\n"
+            f"**Target Repository:** `{owner}/{repo}`\n"
+            f"**Target Issue / Defect:** #{issue_num}\n"
             f"**File Modified:** `{file_path}`\n\n"
             f"#### Summary of Changes\n"
             f"{patch['explanation']}\n\n"
-            f"#### Diff\n"
-            f"```diff\n{patch['diff']}\n```"
+            f"#### Unified Diff\n"
+            f"```diff\n{patch['diff']}\n```\n\n"
+            f"---\n*Generated and submitted autonomously by DevPilot for @{github_user}*"
         )
 
         try:
@@ -299,6 +306,7 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
                 head=branch_name,
                 base="main",
                 body=pr_body,
+                author=github_user,
             )
             pr_num = pr_res.get("number", 45)
             pull_requests.append(pr_res)
@@ -308,8 +316,8 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
                 if issue["number"] == issue_num:
                     issue["pull_request_number"] = pr_num
 
-            decisions.append(f"Pull request #{pr_num} opened on branch `{branch_name}`.")
-            actions.append(f"Created GitHub Pull Request #{pr_num}: '{pr_title}'.")
+            decisions.append(f"Pull request #{pr_num} opened by @{github_user} on branch `{branch_name}`.")
+            actions.append(f"Created GitHub Pull Request #{pr_num} by @{github_user}: '{pr_title}'.")
         except Exception as e:
             err_msg = f"Failed to create PR for #{issue_num}: {str(e)}"
             logger.error(err_msg)
@@ -654,6 +662,7 @@ def run_devpilot_agent(
     user_request: str,
     repo_owner: str = "octocat",
     repo_name: str = "Hello-World",
+    github_username: str = "nikhil-mutreja",
     jira_project: str = "DEV",
     slack_channel: str = "#dev-alerts",
     app_mode: str = "mock",
@@ -665,6 +674,7 @@ def run_devpilot_agent(
         "user_request": user_request,
         "repo_owner": repo_owner,
         "repo_name": repo_name,
+        "github_username": github_username,
         "jira_project": jira_project,
         "slack_channel": slack_channel,
         "app_mode": app_mode,

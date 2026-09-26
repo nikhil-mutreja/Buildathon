@@ -223,11 +223,12 @@ class SwytchcodeClient:
         head: str,
         base: str = "main",
         body: str = "",
+        author: str = "nikhil-mutreja",
     ) -> dict[str, Any]:
         """Create a pull request in repository using Swytchcode github.pull.create."""
         if self.is_mock():
-            logger.info(f"[TOOL] [MOCK] Simulating Pull Request creation: {title} ({head} -> {base})")
-            return self._mock_pull_request(owner, repo, title, head, base, body)
+            logger.info(f"[TOOL] [MOCK] Simulating Pull Request creation by @{author}: {title} ({head} -> {base})")
+            return self._mock_pull_request(owner, repo, title, head, base, body, author)
 
         logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_GITHUB_PULL_CREATE}: {title}")
         token = os.getenv("GITHUB_TOKEN")
@@ -499,7 +500,7 @@ class SwytchcodeClient:
         }
 
     def _mock_pull_request(
-        self, owner: str, repo: str, title: str, head: str, base: str, body: str
+        self, owner: str, repo: str, title: str, head: str, base: str, body: str, author: str = "nikhil-mutreja"
     ) -> dict[str, Any]:
         """Realistic mock GitHub Pull Request creation."""
         pr_number = int(time.time() % 900) + 10
@@ -509,7 +510,8 @@ class SwytchcodeClient:
             "title": title,
             "html_url": f"https://github.com/{owner}/{repo}/pull/{pr_number}",
             "state": "open",
-            "head": {"ref": head, "label": f"{owner}:{head}"},
+            "user": {"login": author, "html_url": f"https://github.com/{author}"},
+            "head": {"ref": head, "label": f"{author}:{head}"},
             "base": {"ref": base, "label": f"{owner}:{base}"},
             "body": body,
             "created_at": "2026-09-26T09:59:00Z",

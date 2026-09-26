@@ -79,7 +79,8 @@ with st.sidebar:
         )
 
     st.markdown("---")
-    st.subheader("Repository & Workspace")
+    st.subheader("Repository & Contributor")
+    github_username = st.text_input("GitHub Account Username", value=os.getenv("GITHUB_USERNAME", "nikhil-mutreja"), help="GitHub username to open and author pull requests under.")
     repo_owner = st.text_input("GitHub Owner / Org", value=os.getenv("GITHUB_REPO_OWNER", "octocat"))
     repo_name = st.text_input("GitHub Repository", value=os.getenv("GITHUB_REPO_NAME", "Hello-World"))
     jira_project = st.text_input("Jira Project Key", value=os.getenv("JIRA_PROJECT_KEY", "DEV"))
@@ -106,46 +107,70 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Dedicated Public Repository & Contributor Input Bar
+st.markdown("#### 🌐 Public Repository & PR Contributor Configuration")
+repo_col1, repo_col2, repo_col3 = st.columns([3, 2, 2])
+with repo_col1:
+    public_repo_input = st.text_input(
+        "Public Repository Link / URL",
+        value=st.session_state.get("public_repo_input", "https://github.com/octocat/Hello-World"),
+        help="Paste any public GitHub repository link (e.g., https://github.com/octocat/Hello-World)",
+    )
+with repo_col2:
+    pr_user_input = st.text_input(
+        "GitHub Username to Open PR",
+        value=st.session_state.get("pr_user_input", github_username),
+        help="GitHub username under which the automated Pull Request will be created and authored.",
+    )
+with repo_col3:
+    st.write("")
+    st.write("")
+    if st.button("🔎 Scan Repo & Open PR", use_container_width=True):
+        st.session_state["user_prompt"] = (
+            f"Check public repository {public_repo_input}, analyze the complete repo, "
+            f"find all bugs in the code, fix them, and open pull requests for github account username :- {pr_user_input}."
+        )
+
 # Demo Quick Prompts
 st.markdown("#### ⚡ Autonomous Software Engineering Tasks")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    if st.button("🌐 1. Scan Public Repo & Open PRs", use_container_width=True):
+    if st.button(f"🌐 1. Scan Public Repo (@{pr_user_input})", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Check the given public repo https://github.com/octocat/Hello-World, "
-            "find bugs in the codebase, fix them, open pull requests, and create Jira tasks."
+            f"Check the given public repo https://github.com/octocat/Hello-World, "
+            f"analyze the complete repo, find bugs in the codebase, fix them, and open pull requests for github account username :- {pr_user_input}."
         )
 
 with col2:
     if st.button("💳 2. Fix Payment 500 Bug (#102)", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Check the repo, find the payment gateway 500 bug #102, "
-            "fix the code in payment_service.py, open a pull request, create a Jira task, and notify Slack."
+            f"Check the repo, find the payment gateway 500 bug #102, "
+            f"fix the code in payment_service.py, open a pull request for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
         )
 
 with col3:
     if st.button("🔒 3. Fix Auth Token Leak (#101)", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Check the repo, find the OAuth token leak security vulnerability #101, "
-            "fix the code in oauth_handler.py, open a pull request, create a Jira task, and notify Slack."
+            f"Check the repo, find the OAuth token leak security vulnerability #101, "
+            f"fix the code in oauth_handler.py, open a pull request for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
         )
 
 with col4:
     if st.button("⚡ 4. Fix Memory Leak (#103)", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Check the repo, find the WebSocket connection pool memory leak #103, "
-            "fix the code in broker.py, open a pull request, create a Jira task, and notify Slack."
+            f"Check the repo, find the WebSocket connection pool memory leak #103, "
+            f"fix the code in broker.py, open a pull request for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
         )
 
 default_prompt = st.session_state.get(
     "user_prompt",
-    "Check the given public repo https://github.com/octocat/Hello-World, "
-    "find the bug in it, fix it, open a pull request, create a Jira task, and notify Slack.",
+    f"Check public repository {public_repo_input}, analyze the complete repo, "
+    f"find the bug in it, fix it, and open a pull request for github account username :- {pr_user_input}.",
 )
 
 user_request = st.text_area(
-    "Enter natural-language engineering task for DevPilot (supports any public GitHub repo URL):",
+    "Enter natural-language engineering task for DevPilot (supports any public GitHub repo URL & username):",
     value=default_prompt,
     height=90,
 )
@@ -158,6 +183,7 @@ if run_button and user_request:
             user_request=user_request,
             repo_owner=repo_owner,
             repo_name=repo_name,
+            github_username=pr_user_input,
             jira_project=jira_project,
             slack_channel=slack_channel,
             app_mode=app_mode,
@@ -211,7 +237,7 @@ if run_button and user_request:
                 # Associated PR
                 for pr in prs:
                     if f"#{patch['github_issue_number']}" in pr.get("title", ""):
-                        st.success(f"🔀 **Pull Request Opened:** [{pr.get('title')}]({pr.get('html_url')}) (`#{pr.get('number')}`)")
+                        st.success(f"🔀 **Pull Request Opened:** [{pr.get('title')}]({pr.get('html_url')}) (`#{pr.get('number')}`) by **@{result.get('github_username', 'nikhil-mutreja')}**")
 
                 st.markdown("**Unified Diff:**")
                 st.code(patch["diff"], language="diff")

@@ -31,6 +31,18 @@ def parse_user_intent(request: str) -> dict[str, Any]:
                 target_repo_owner = slug_match.group(1)
                 target_repo_name = slug_match.group(2).rstrip("/").rstrip(".git")
 
+    # Detect GitHub username if mentioned (e.g. "username :- nikhil-mutreja" or "github account username :- nikhil-mutreja")
+    target_username = "nikhil-mutreja"
+    user_match = re.search(
+        r'(?:github\s+account\s+username|github\s+username|github\s+account|username|account|user)\s*(?::\s*-|:-|:|-|=|is)?\s*([a-zA-Z0-9_\-]+)',
+        request,
+        re.IGNORECASE,
+    )
+    if user_match:
+        matched_user = user_match.group(1).strip()
+        if matched_user.lower() not in ["the", "a", "my", "to", "and", "or", "for", "in", "github", "account", "username", "repo"]:
+            target_username = matched_user
+
     # Detect specific issue number if mentioned (e.g. "fix #102" or "issue 101")
     target_issue_num = None
     issue_match = re.search(r'(?:issue|#)\s*(\d+)', req_lower)
@@ -106,6 +118,7 @@ def parse_user_intent(request: str) -> dict[str, Any]:
         "task_type": task_type,
         "target_repo_owner": target_repo_owner,
         "target_repo_name": target_repo_name,
+        "target_github_username": target_username,
         "target_issue_number": target_issue_num,
         "needs_github": needs_github,
         "needs_code_fix": needs_code_fix,
