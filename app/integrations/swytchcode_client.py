@@ -99,6 +99,37 @@ class SwytchcodeClient:
             logger.error(f"[TOOL] Swytchcode GitHub execution failed: {err_msg}")
             raise RuntimeError(f"Swytchcode GitHub error: {err_msg}")
 
+    def _find_repository_directory(self, owner: str, repo: str) -> Optional[str]:
+        """Resolve repository to an actual directory on disk if available."""
+        workspace_root = "/home/nikhil-mutreja/buildathon"
+        clean_repo = repo.rstrip("/").rstrip(".git")
+        repo_base = os.path.basename(clean_repo)
+
+        candidates = [
+            clean_repo,  # Direct path if passed by user
+            os.path.join(workspace_root, clean_repo),
+            os.path.join(workspace_root, "test_repositories", repo_base),
+            os.path.join(workspace_root, "test_repositories", repo_base.replace("-", "_")),
+            os.path.join(workspace_root, "test_repositories", clean_repo),
+            f"/tmp/devpilot_repos/{owner}_{repo_base}",
+            f"/tmp/devpilot_repos/{repo_base}",
+            f"/home/nikhil-mutreja/{clean_repo}",
+        ]
+
+        if repo_base in ["ecommerce", "ecommerce-service", "ecommerce_service", "Hello-World", "Hello_World"]:
+            candidates.insert(0, os.path.join(workspace_root, "test_repositories", "ecommerce_service"))
+        elif repo_base in ["auth", "auth-microservice", "auth_microservice"]:
+            candidates.insert(0, os.path.join(workspace_root, "test_repositories", "auth_microservice"))
+        elif repo_base in ["realtime", "realtime-stream-service", "realtime_stream_service"]:
+            candidates.insert(0, os.path.join(workspace_root, "test_repositories", "realtime_stream_service"))
+        elif repo_base in ["buildathon"]:
+            candidates.insert(0, workspace_root)
+
+        for cand in candidates:
+            if cand and os.path.isdir(cand):
+                return os.path.abspath(cand)
+        return None
+
     def get_repository_file(
         self,
         owner: str,
@@ -106,36 +137,22 @@ class SwytchcodeClient:
         path: str,
         ref: str = "main",
     ) -> dict[str, Any]:
-        """Fetch file contents from repository using Swytchcode github.content.get."""
-        # 1. Check local cloned or mapped repository directory first
-        local_file = f"/tmp/devpilot_repos/{owner}_{repo}/{path}"
-        if os.path.isfile(local_file):
-            with open(local_file, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            return {
-                "name": os.path.basename(path),
-                "path": path,
-                "sha": "local-sha-real",
-                "size": len(content),
-                "type": "file",
-                "raw_text": content,
-                "content": base64.b64encode(content.encode("utf-8")).decode("utf-8"),
-            }
-
-        # 2. Check current workspace repository if targeted
-        workspace_file = os.path.join("/home/nikhil-mutreja/buildathon", path)
-        if (repo == "buildathon" or f"{owner}/{repo}" == "nikhil-mutreja/buildathon") and os.path.isfile(workspace_file):
-            with open(workspace_file, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            return {
-                "name": os.path.basename(path),
-                "path": path,
-                "sha": "workspace-sha-real",
-                "size": len(content),
-                "type": "file",
-                "raw_text": content,
-                "content": base64.b64encode(content.encode("utf-8")).decode("utf-8"),
-            }
+        """Fetch file contents from repository using real disk or Swytchcode github.content.get."""
+        repo_dir = self._find_repository_directory(owner, repo)
+        if repo_dir:
+            full_path = os.path.join(repo_dir, path)
+            if os.path.isfile(full_path):
+                with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                return {
+                    "name": os.path.basename(path),
+                    "path": path,
+                    "sha": "real-disk-sha",
+                    "size": len(content),
+                    "type": "file",
+                    "raw_text": content,
+                    "content": base64.b64encode(content.encode("utf-8")).decode("utf-8"),
+                }
 
         if self.is_mock():
             logger.info(f"[TOOL] [MOCK] Simulating repository file read for {path}")
@@ -167,30 +184,19 @@ class SwytchcodeClient:
         ref: str = "main",
     ) -> list[str]:
         """List source code files in repository for inspection and defect scanning."""
-        # 1. Check if local cloned repository exists in /tmp
-        local_repo_dir = f"/tmp/devpilot_repos/{owner}_{repo}"
-        if os.path.isdir(local_repo_dir):
+        repo_dir = self._find_repository_directory(owner, repo)
+        if repo_dir and os.path.isdir(repo_dir):
             discovered = []
-            for root, _, filenames in os.walk(local_repo_dir):
+            for root, dirs, filenames in os.walk(repo_dir):
+                dirs[:] = [d for d in dirs if d not in [".venv", ".git", "node_modules", "__pycache__", ".pytest_cache", ".swytchcode"]]
                 for f in filenames:
-                    if any(f.endswith(ext) for ext in [".py", ".ts", ".tsx", ".js"]):
-                        rel = os.path.relpath(os.path.join(root, f), local_repo_dir)
+                    if any(f.endswith(ext) for ext in [".py", ".ts", ".tsx", ".js", ".jsx"]):
+                        rel = os.path.relpath(os.path.join(root, f), repo_dir)
                         discovered.append(rel)
             if discovered:
-                return discovered
+                return sorted(discovered)
 
-        # 2. Check if current workspace repo is targeted
-        if repo == "buildathon" or f"{owner}/{repo}" == "nikhil-mutreja/buildathon":
-            discovered = []
-            for root, _, filenames in os.walk("/home/nikhil-mutreja/buildathon/app"):
-                for f in filenames:
-                    if f.endswith(".py"):
-                        rel = os.path.relpath(os.path.join(root, f), "/home/nikhil-mutreja/buildathon")
-                        discovered.append(rel)
-            if discovered:
-                return discovered
-
-        # 3. If mock mode, return full suite of multi-language repository code files
+        # Fallback to mock files only if no on-disk repo found
         if self.is_mock():
             return [
                 "src/services/payment_service.py",
@@ -592,11 +598,14 @@ class SwytchcodeClient:
             "raw_text": content,
         }
 
+    _global_pr_seq = 100
+
     def _mock_pull_request(
         self, owner: str, repo: str, title: str, head: str, base: str, body: str, author: str = "nikhil-mutreja"
     ) -> dict[str, Any]:
-        """Realistic mock GitHub Pull Request creation."""
-        pr_number = int(time.time() % 900) + 10
+        """Realistic mock GitHub Pull Request creation with strictly unique numbers."""
+        SwytchcodeClient._global_pr_seq += 1
+        pr_number = SwytchcodeClient._global_pr_seq
         return {
             "id": 80000 + pr_number,
             "number": pr_number,

@@ -412,3 +412,94 @@ def test_ast_defect_analysis_and_snippets():
     assert d_sql is not None
     assert d_sql["cwe"] == "CWE-89"
     assert d_sql["lineno"] == 2
+
+
+def test_real_on_disk_repo_auth_microservice():
+    """Verify scanning real auth_microservice on disk only identifies auth defects with accurate lines."""
+    state = run_devpilot_agent(
+        user_request=(
+            "Scan repository test_repositories/auth_microservice, analyze all real code files, "
+            "find real bugs in the code, fix them, and open pull requests for senior engineers to review for github account username :- nikhil-mutreja."
+        ),
+        app_mode="mock",
+    )
+    assert state["repo_name"] == "auth_microservice"
+    assert state["github_username"] == "nikhil-mutreja"
+    file_paths = [issue["file_path"] for issue in state["actionable_issues"]]
+    assert "src/auth/session_manager.py" in file_paths
+    assert "src/roles/user_permissions.py" in file_paths
+    # Ensure no ecommerce or realtime files are present
+    assert not any("payment_gateway" in p for p in file_paths)
+    assert not any("event_dispatcher" in p for p in file_paths)
+
+    assert len(state["pull_requests"]) == 2
+    for pr in state["pull_requests"]:
+        assert pr["user"]["login"] == "nikhil-mutreja"
+        assert "@nikhil-mutreja" in pr["title"]
+        assert pr["lineno"] in (7, 11)
+
+
+def test_real_on_disk_repo_ecommerce_service():
+    """Verify scanning real ecommerce_service on disk only identifies ecommerce defects."""
+    state = run_devpilot_agent(
+        user_request=(
+            "Scan repository test_repositories/ecommerce_service, analyze all real code files, "
+            "find real bugs in the code, fix them, and open pull requests for senior engineers to review for github account username :- nikhil-mutreja."
+        ),
+        app_mode="mock",
+    )
+    assert state["repo_name"] == "ecommerce_service"
+    file_paths = [issue["file_path"] for issue in state["actionable_issues"]]
+    assert "src/checkout/payment_gateway.py" in file_paths
+    assert "src/orders/database.py" in file_paths
+    assert "src/storage/receipt_manager.py" in file_paths
+
+    assert len(state["pull_requests"]) == 3
+    for pr in state["pull_requests"]:
+        assert pr["user"]["login"] == "nikhil-mutreja"
+        assert "@nikhil-mutreja" in pr["title"]
+
+
+def test_real_on_disk_repo_realtime_stream_service():
+    """Verify scanning real realtime_stream_service on disk only identifies realtime defects."""
+    state = run_devpilot_agent(
+        user_request=(
+            "Scan repository test_repositories/realtime_stream_service, analyze all real code files, "
+            "find real bugs in the code, fix them, and open pull requests for senior engineers to review for github account username :- nikhil-mutreja."
+        ),
+        app_mode="mock",
+    )
+    assert state["repo_name"] == "realtime_stream_service"
+    file_paths = [issue["file_path"] for issue in state["actionable_issues"]]
+    assert "src/broker/event_dispatcher.py" in file_paths
+    assert "src/config/service_settings.py" in file_paths
+
+    assert len(state["pull_requests"]) == 2
+    for pr in state["pull_requests"]:
+        assert pr["user"]["login"] == "nikhil-mutreja"
+        assert "@nikhil-mutreja" in pr["title"]
+
+
+def test_distinct_repositories_produce_strictly_disjoint_results():
+    """Verify scanning different repositories never returns identical or canned outputs."""
+    auth_state = run_devpilot_agent(
+        "Scan repository test_repositories/auth_microservice, fix bugs, open PR for username :- nikhil-mutreja",
+        app_mode="mock",
+    )
+    ecom_state = run_devpilot_agent(
+        "Scan repository test_repositories/ecommerce_service, fix bugs, open PR for username :- nikhil-mutreja",
+        app_mode="mock",
+    )
+
+    auth_files = set(issue["file_path"] for issue in auth_state["actionable_issues"])
+    ecom_files = set(issue["file_path"] for issue in ecom_state["actionable_issues"])
+
+    assert len(auth_files) > 0
+    assert len(ecom_files) > 0
+    # Files must be strictly disjoint
+    assert auth_files.isdisjoint(ecom_files)
+
+    auth_prs = [pr["title"] for pr in auth_state["pull_requests"]]
+    ecom_prs = [pr["title"] for pr in ecom_state["pull_requests"]]
+    assert set(auth_prs).isdisjoint(set(ecom_prs))
+

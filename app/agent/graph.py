@@ -117,15 +117,18 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
     analyzed = []
     actionable = []
 
-    # 1. Triage existing GitHub issues if present
-    for issue in raw_issues:
-        result = triage_issue(issue)
-        # If user targeted a specific issue, prioritize it
-        if target_num and result["number"] == target_num:
-            result["is_actionable"] = True
-        analyzed.append(result)
-        if result["is_actionable"]:
-            actionable.append(result)
+    has_local_repo = client._find_repository_directory(owner, repo) is not None
+
+    # 1. Triage existing GitHub issues if present (or if specifically targeted)
+    if not has_local_repo or target_num or not intent.get("needs_code_fix", False):
+        for issue in raw_issues:
+            result = triage_issue(issue)
+            # If user targeted a specific issue, prioritize it
+            if target_num and result["number"] == target_num:
+                result["is_actionable"] = True
+            analyzed.append(result)
+            if result["is_actionable"]:
+                actionable.append(result)
 
     # Filter to target issue if specifically asked
     if target_num:
@@ -133,8 +136,8 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
         if filtered:
             actionable = filtered
 
-    # 2. Autonomous Code Defect Scan: If no issues or if user requested finding bugs in repo
-    if not actionable or (intent.get("needs_code_fix", False) and not target_num):
+    # 2. Autonomous Code Defect Scan: Proactively scan codebase files in target repository
+    if (not actionable or intent.get("needs_code_fix", False)) and not target_num:
         decisions.append(f"Scanning codebase files in `{owner}/{repo}` for latent bugs and security vulnerabilities.")
         repo_files = client.list_repository_files(owner=owner, repo=repo)
         scan_idx = 1
@@ -151,7 +154,7 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
                         is_act = defect["severity"] in ("CRITICAL", "HIGH")
                         defect_item = {
                             "id": 2000 + scan_idx,
-                            "number": 200 + scan_idx,
+                            "number": 100 + scan_idx,
                             "title": f"[{defect['cwe']}] {defect['title']}",
                             "body": defect["reason"],
                             "html_url": f"https://github.com/{owner}/{repo}/blob/main/{fpath}",
@@ -164,6 +167,7 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
                             "cwe": defect.get("cwe"),
                             "lineno": defect.get("lineno"),
                             "snippet": defect.get("snippet"),
+                            "defect_type": defect.get("defect_type"),
                             "jira_ticket_key": None,
                             "pull_request_number": None,
                         }

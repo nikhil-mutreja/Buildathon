@@ -112,13 +112,40 @@ st.markdown(
 )
 
 # Dedicated Public Repository & Contributor Input Bar
-st.markdown("#### 🌐 Public Repository & PR Contributor Configuration")
+st.markdown("#### 🌐 Target Codebase & Contributor Configuration")
+
+preset_options = [
+    "🛒 test_repositories/ecommerce_service (Real Code: Float Precision, SQL Injection, File Descriptor Leak)",
+    "🔑 test_repositories/auth_microservice (Real Code: Sensitive Token Leak, Mutable Default Arg)",
+    "⚡ test_repositories/realtime_stream_service (Real Code: Connection Pool Leak, Config File Leak)",
+    "🛠️ Current Project Workspace (/home/nikhil-mutreja/buildathon)",
+    "🌐 Custom Public GitHub URL / Local Path...",
+]
+
+selected_preset = st.selectbox(
+    "Select Target Repository to Scan & Fix (Real Code on Local Filesystem or URL):",
+    options=preset_options,
+    index=0,
+    help="Choose one of the real repositories with live code on disk, or enter your own custom URL/path."
+)
+
+if "ecommerce_service" in selected_preset:
+    default_repo_url = "test_repositories/ecommerce_service"
+elif "auth_microservice" in selected_preset:
+    default_repo_url = "test_repositories/auth_microservice"
+elif "realtime_stream_service" in selected_preset:
+    default_repo_url = "test_repositories/realtime_stream_service"
+elif "Current Project Workspace" in selected_preset:
+    default_repo_url = "/home/nikhil-mutreja/buildathon"
+else:
+    default_repo_url = "https://github.com/octocat/Hello-World"
+
 repo_col1, repo_col2, repo_col3 = st.columns([3, 2, 2])
 with repo_col1:
     public_repo_input = st.text_input(
-        "Public Repository Link / URL",
-        value=st.session_state.get("public_repo_input", "https://github.com/octocat/Hello-World"),
-        help="Paste any public GitHub repository link (e.g., https://github.com/octocat/Hello-World)",
+        "Target Repository Path or Public URL",
+        value=default_repo_url,
+        help="Specify any repository directory path or public GitHub URL.",
     )
 with repo_col2:
     pr_user_input = st.text_input(
@@ -131,53 +158,53 @@ with repo_col3:
     st.write("")
     if st.button("🔎 Scan Repo & Open PR", use_container_width=True):
         st.session_state["user_prompt"] = (
-            f"Check public repository {public_repo_input}, analyze the complete repo, "
-            f"find all bugs in the code, fix them, and open pull requests for senior engineers to review for github account username :- {pr_user_input}."
+            f"Scan repository {public_repo_input}, analyze all real code files, "
+            f"find real bugs in the code, fix them, and open pull requests for senior engineers to review for github account username :- {pr_user_input}."
         )
         st.session_state["auto_trigger"] = True
 
-# Parse repository owner and name from public repository URL if provided
+# Parse repository owner and name from public repository URL or local path
 url_m = re.search(r'github\.com/([a-zA-Z0-9_\-\.]+)/([a-zA-Z0-9_\-\.]+)', public_repo_input)
 if url_m:
     effective_owner = url_m.group(1)
     effective_repo = url_m.group(2).rstrip("/").rstrip(".git")
 else:
-    effective_owner = repo_owner
-    effective_repo = repo_name
+    effective_owner = "local"
+    effective_repo = public_repo_input.strip()
 
 # Demo Quick Prompts
-st.markdown("#### ⚡ Autonomous Software Engineering Tasks")
+st.markdown("#### ⚡ 1-Click Autonomous Repository Inspections")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    if st.button(f"🌐 1. Scan Public Repo (@{pr_user_input})", use_container_width=True):
+    if st.button("🛒 1. Scan Ecommerce API", use_container_width=True):
         st.session_state["user_prompt"] = (
-            f"Check the given public repo {public_repo_input}, "
-            f"analyze the complete repo, find bugs in the codebase, fix them, and open pull requests for senior engineers to review for github account username :- {pr_user_input}."
+            f"Scan repository test_repositories/ecommerce_service, analyze all real code files, "
+            f"find real bugs in the code, fix them, and open pull requests for senior engineers to review for github account username :- {pr_user_input}."
         )
         st.session_state["auto_trigger"] = True
 
 with col2:
-    if st.button("💳 2. Fix Payment 500 Bug (#102)", use_container_width=True):
+    if st.button("🔑 2. Scan Auth Microservice", use_container_width=True):
         st.session_state["user_prompt"] = (
-            f"Check the repo, find the payment gateway 500 bug #102, "
-            f"fix the code in payment_service.py, open a pull request for senior engineers to review for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
+            f"Scan repository test_repositories/auth_microservice, analyze all real code files, "
+            f"find real bugs in the code, fix them, and open pull requests for senior engineers to review for github account username :- {pr_user_input}."
         )
         st.session_state["auto_trigger"] = True
 
 with col3:
-    if st.button("🔒 3. Fix Auth Token Leak (#101)", use_container_width=True):
+    if st.button("⚡ 3. Scan Realtime Gateway", use_container_width=True):
         st.session_state["user_prompt"] = (
-            f"Check the repo, find the OAuth token leak security vulnerability #101, "
-            f"fix the code in oauth_handler.py, open a pull request for senior engineers to review for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
+            f"Scan repository test_repositories/realtime_stream_service, analyze all real code files, "
+            f"find real bugs in the code, fix them, and open pull requests for senior engineers to review for github account username :- {pr_user_input}."
         )
         st.session_state["auto_trigger"] = True
 
 with col4:
-    if st.button("⚡ 4. Fix Memory Leak (#103)", use_container_width=True):
+    if st.button("🛠️ 4. Scan Main Project Repo", use_container_width=True):
         st.session_state["user_prompt"] = (
-            f"Check the repo, find the WebSocket connection pool memory leak #103, "
-            f"fix the code in broker.py, open a pull request for senior engineers to review for github account username :- {pr_user_input}, create a Jira task, and notify Slack."
+            f"Scan repository /home/nikhil-mutreja/buildathon, analyze all real code files, "
+            f"inspect code quality, fix any bugs found, and open pull requests for senior engineers to review for github account username :- {pr_user_input}."
         )
         st.session_state["auto_trigger"] = True
 
@@ -314,12 +341,12 @@ if "last_result" in st.session_state:
 
                     st.markdown("#### 📋 Senior Engineer Sign-Off Checklist")
                     for c_idx, check_item in enumerate(checklist):
-                        st.checkbox(check_item, value=True, key=f"check_{pr_num}_{c_idx}")
+                        st.checkbox(check_item, value=True, key=f"check_{idx}_{pr_num}_{c_idx}")
 
                     st.markdown("#### ✍️ Senior Reviewer Action")
                     btn_col1, btn_col2 = st.columns([2, 3])
                     with btn_col1:
-                        if st.button(f"✅ Approve & Merge PR #{pr_num}", key=f"merge_{pr_num}"):
+                        if st.button(f"✅ Approve & Merge PR #{pr_num}", key=f"merge_{idx}_{pr_num}"):
                             st.success(f"🎉 **PR #{pr_num} Approved & Merged!** Contributed by @{contributor}. Automated CI/CD pipeline triggered.")
                     with btn_col2:
                         st.caption(f"Merged into `{effective_owner}/{effective_repo}:main` with automated verification.")
