@@ -1,0 +1,11 @@
+{
+  "id": 1001,
+  "number": 1,
+  "title": "Fix greeting function to handle empty or whitespace names",
+  "body": "When greet('') or greet('   ') is called with an empty string or whitespace, it returns 'Hello ' or 'Hello    ' instead of 'Hello Anonymous'. It should return 'Hello Anonymous' when name is empty or only whitespace.",
+  "state": "open",
+  "html_url": "https://github.com/nikhil-mutreja/real_test_repo/issues/1",
+  "file_path": "src/greeter.py",
+  "test_path": "tests/test_greeter.py",
+  "labels": ["bug", "good-first-issue"]
+}
