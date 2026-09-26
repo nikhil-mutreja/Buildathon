@@ -666,15 +666,18 @@ def run_devpilot_agent(
     jira_project: str = "DEV",
     slack_channel: str = "#dev-alerts",
     app_mode: str = "mock",
+    **kwargs: Any,
 ) -> DevPilotState:
     """Execute the complete DevPilot LangGraph workflow."""
     app = build_devpilot_graph()
+
+    resolved_username = kwargs.get("github_username") or github_username or os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
 
     initial_state: DevPilotState = {
         "user_request": user_request,
         "repo_owner": repo_owner,
         "repo_name": repo_name,
-        "github_username": github_username,
+        "github_username": resolved_username,
         "jira_project": jira_project,
         "slack_channel": slack_channel,
         "app_mode": app_mode,

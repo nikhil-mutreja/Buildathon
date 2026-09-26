@@ -7,6 +7,9 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import streamlit as st
+import importlib
+import app.agent.graph
+importlib.reload(app.agent.graph)
 from app.agent.graph import run_devpilot_agent
 
 st.set_page_config(
@@ -179,15 +182,26 @@ run_button = st.button("🚀 Run AI Software Engineer", type="primary", use_cont
 
 if run_button and user_request:
     with st.spinner("DevPilot AI Software Engineer executing end-to-end coding workflow..."):
-        result = run_devpilot_agent(
-            user_request=user_request,
-            repo_owner=repo_owner,
-            repo_name=repo_name,
-            github_username=pr_user_input,
-            jira_project=jira_project,
-            slack_channel=slack_channel,
-            app_mode=app_mode,
-        )
+        try:
+            result = run_devpilot_agent(
+                user_request=user_request,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                github_username=pr_user_input,
+                jira_project=jira_project,
+                slack_channel=slack_channel,
+                app_mode=app_mode,
+            )
+        except TypeError:
+            # Fallback if in-memory module was cached without github_username keyword argument
+            result = run_devpilot_agent(
+                user_request=user_request,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                jira_project=jira_project,
+                slack_channel=slack_channel,
+                app_mode=app_mode,
+            )
 
     st.markdown("---")
 
