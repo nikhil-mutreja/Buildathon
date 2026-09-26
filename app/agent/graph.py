@@ -151,7 +151,7 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
                         is_act = defect["severity"] in ("CRITICAL", "HIGH")
                         defect_item = {
                             "id": 2000 + scan_idx,
-                            "number": 100 + scan_idx,
+                            "number": 200 + scan_idx,
                             "title": f"[{defect['cwe']}] {defect['title']}",
                             "body": defect["reason"],
                             "html_url": f"https://github.com/{owner}/{repo}/blob/main/{fpath}",
@@ -236,14 +236,15 @@ def generate_code_fix_node(state: DevPilotState) -> dict[str, Any]:
     decisions = state.get("decisions", [])
     actions = state.get("actions_taken", [])
 
-    file_map = {f["github_issue_number"]: f["content"] for f in inspected_files}
+    file_map = {f["path"]: f["content"] for f in inspected_files}
     patches = []
 
     for issue in actionable:
         issue_num = issue["number"]
-        orig_code = file_map.get(issue_num, "")
+        fpath = issue.get("file_path", "")
+        orig_code = file_map.get(fpath) or next((f["content"] for f in inspected_files if f.get("github_issue_number") == issue_num), "")
         if not issue.get("lineno") or not issue.get("snippet"):
-            detected = scan_code_for_defects(issue.get("file_path", ""), orig_code)
+            detected = scan_code_for_defects(fpath, orig_code)
             if detected:
                 issue["lineno"] = detected.get("lineno")
                 issue["snippet"] = detected.get("snippet")
