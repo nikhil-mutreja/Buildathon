@@ -227,3 +227,69 @@ def test_mock_client_capabilities():
     # Slack
     slack_res = client.send_slack_message("#dev-test", "Test alert")
     assert slack_res["ok"] is True
+
+
+def test_option_security_token_leak_workflow():
+    """Option 2: Check repo, find OAuth token leak (#101), fix code, open PR, Jira, Slack."""
+    state = run_devpilot_agent(
+        user_request="Check the repo, find the OAuth token leak security vulnerability #101, fix the code in oauth_handler.py, open a pull request, create a Jira task, and notify Slack.",
+        app_mode="mock",
+    )
+    assert len(state["actionable_issues"]) == 1
+    assert state["actionable_issues"][0]["number"] == 101
+    assert "oauth_handler.py" in state["inspected_files"][0]["path"]
+    assert "masked_token" in state["code_patches"][0]["fixed_code"]
+    assert len(state["pull_requests"]) == 1
+    assert "Resolve #101" in state["pull_requests"][0]["title"]
+    assert len(state["jira_results"]) == 1
+    assert state["jira_results"][0]["key"] == "DEV-201"
+    assert len(state["slack_results"]) == 1
+
+
+def test_option_websocket_memory_leak_workflow():
+    """Option 3: Check repo, find WebSocket memory leak (#103), fix code, open PR, Jira, Slack."""
+    state = run_devpilot_agent(
+        user_request="Check the repo, find the WebSocket connection pool memory leak #103, fix the code in broker.py, open a pull request, create a Jira task, and notify Slack.",
+        app_mode="mock",
+    )
+    assert len(state["actionable_issues"]) == 1
+    assert state["actionable_issues"][0]["number"] == 103
+    assert "broker.py" in state["inspected_files"][0]["path"]
+    assert "WeakSet" in state["code_patches"][0]["fixed_code"]
+    assert len(state["pull_requests"]) == 1
+    assert "Resolve #103" in state["pull_requests"][0]["title"]
+    assert len(state["jira_results"]) == 1
+    assert state["jira_results"][0]["key"] == "DEV-203"
+    assert len(state["slack_results"]) == 1
+
+
+def test_option_multi_bug_autonomous_sweep():
+    """Option 4: Autonomous multi-bug sweep across repo, fixing all critical defects, opening PRs."""
+    state = run_devpilot_agent(
+        user_request="Check the repo, find all critical bugs, fix each of them in the codebase, open pull requests, create Jira tasks, and notify Slack.",
+        app_mode="mock",
+    )
+    assert len(state["actionable_issues"]) == 3
+    assert len(state["inspected_files"]) == 3
+    assert len(state["code_patches"]) == 3
+    assert len(state["pull_requests"]) == 3
+    assert len(state["jira_results"]) == 3
+    assert len(state["slack_results"]) == 1
+    # Check that all 3 PRs exist
+    pr_titles = [pr["title"] for pr in state["pull_requests"]]
+    assert any("#101" in t for t in pr_titles)
+    assert any("#102" in t for t in pr_titles)
+    assert any("#103" in t for t in pr_titles)
+
+
+def test_user_natural_language_request_check_fix_open_pr():
+    """Verify exact user instruction: check repo, find bug, fix it, open PR."""
+    state = run_devpilot_agent(
+        user_request="this agent go and check the repo after that found bug in them after founding bug it must fix it and open pr",
+        app_mode="mock",
+    )
+    assert state["task_type"] == "bug_fix"
+    assert len(state["inspected_files"]) >= 1
+    assert len(state["code_patches"]) >= 1
+    assert len(state["pull_requests"]) >= 1
+

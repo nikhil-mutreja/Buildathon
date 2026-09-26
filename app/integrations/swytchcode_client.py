@@ -424,6 +424,21 @@ class SwytchcodeClient:
                 "  return <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>Toggle Theme</button>;\n"
                 "};\n"
             ),
+            "src/realtime/broker.py": (
+                "# Realtime WebSocket Event Broker\n"
+                "import asyncio\n"
+                "import logging\n\n"
+                "logger = logging.getLogger(__name__)\n\n"
+                "class ConnectionPool:\n"
+                "    def __init__(self):\n"
+                "        self.connections = []\n\n"
+                "    def add(self, ws):\n"
+                "        # BUGGY CODE: keeps appending sockets without cleanup or heartbeat check\n"
+                "        self.connections.append(ws)\n\n"
+                "    def broadcast(self, message):\n"
+                "        for ws in self.connections:\n"
+                "            ws.send(message)\n"
+            ),
         }
         content = codebase.get(
             path,

@@ -111,37 +111,37 @@ st.markdown("#### ⚡ Autonomous Software Engineering Tasks")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    if st.button("🛠️ Fix Bug & Open PR", use_container_width=True):
+    if st.button("💳 1. Fix Payment 500 Bug (#102)", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Investigate and fix bug #102: payment gateway 500 error on checkout, "
-            "open a pull request with the fix, create a Jira task, and notify Slack."
+            "Check the repo, find the payment gateway 500 bug #102, "
+            "fix the code in payment_service.py, open a pull request, create a Jira task, and notify Slack."
         )
 
 with col2:
-    if st.button("🔒 Security Remediation", use_container_width=True):
+    if st.button("🔒 2. Fix Auth Token Leak (#101)", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Remediate critical security vulnerability #101: token leakage in OAuth callback, "
-            "generate code patch, open PR, track in Jira, and alert the team on Slack."
+            "Check the repo, find the OAuth token leak security vulnerability #101, "
+            "fix the code in oauth_handler.py, open a pull request, create a Jira task, and notify Slack."
         )
 
 with col3:
-    if st.button("✨ Feature Development", use_container_width=True):
+    if st.button("⚡ 3. Fix Memory Leak (#103)", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Implement dark mode theme switcher #105, commit the frontend changes, "
-            "create a pull request, create a Jira ticket, and notify Slack."
+            "Check the repo, find the WebSocket connection pool memory leak #103, "
+            "fix the code in broker.py, open a pull request, create a Jira task, and notify Slack."
         )
 
 with col4:
-    if st.button("📋 Repo Triage & Tracking", use_container_width=True):
+    if st.button("🤖 4. Autonomous Bug Sweep (All)", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Analyze latest GitHub repository issues, identify critical items, "
-            "create Jira tasks, and notify the team on Slack."
+            "Check the repo, find all critical bugs, "
+            "fix each of them in the codebase, open pull requests, create Jira tasks, and notify Slack."
         )
 
 default_prompt = st.session_state.get(
     "user_prompt",
-    "Investigate and fix bug #102: payment gateway 500 error on checkout, "
-    "open a pull request with the fix, create a Jira task, and notify Slack.",
+    "Check the repo, find the payment gateway 500 bug #102, "
+    "fix the code in payment_service.py, open a pull request, create a Jira task, and notify Slack.",
 )
 
 user_request = st.text_area(

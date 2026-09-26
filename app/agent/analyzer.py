@@ -247,6 +247,36 @@ def diagnose_and_generate_patch(
             "};\n"
         )
         explanation = "Implemented theme state persistence in localStorage with active DOM data-theme attribute updates."
+    elif "broker" in file_path:
+        fixed_code = (
+            "# Realtime WebSocket Event Broker with Auto-Cleanup\n"
+            "import asyncio\n"
+            "import logging\n"
+            "from weakref import WeakSet\n\n"
+            "logger = logging.getLogger(__name__)\n\n"
+            "class ConnectionPool:\n"
+            "    def __init__(self):\n"
+            "        # FIXED: Use WeakSet and auto-purge closed sockets to prevent memory leak\n"
+            "        self.connections = WeakSet()\n\n"
+            "    def add(self, ws):\n"
+            "        self.connections.add(ws)\n\n"
+            "    def broadcast(self, message):\n"
+            "        dead = []\n"
+            "        for ws in list(self.connections):\n"
+            "            try:\n"
+            "                if getattr(ws, 'closed', False):\n"
+            "                    dead.append(ws)\n"
+            "                else:\n"
+            "                    ws.send(message)\n"
+            "            except Exception:\n"
+            "                dead.append(ws)\n"
+            "        for ws in dead:\n"
+            "            self.connections.discard(ws)\n"
+        )
+        explanation = (
+            "Replaced unbounded connection list with WeakSet and automated dead-socket purging. "
+            "Eliminates memory leaks and file descriptor exhaustion under high concurrent load."
+        )
 
     # Generate unified diff
     orig_lines = original_code.splitlines(keepends=True)
