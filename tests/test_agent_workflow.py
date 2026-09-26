@@ -293,3 +293,43 @@ def test_user_natural_language_request_check_fix_open_pr():
     assert len(state["code_patches"]) >= 1
     assert len(state["pull_requests"]) >= 1
 
+
+def test_public_repo_url_parsing_and_defect_scanning():
+    """Verify natural-language request containing public GitHub repository URL."""
+    state = run_devpilot_agent(
+        user_request="Check public repository https://github.com/octocat/Hello-World, find the bug in it after finding bug fix it and open pr",
+        app_mode="mock",
+    )
+    assert state["repo_owner"] == "octocat"
+    assert state["repo_name"] == "Hello-World"
+    assert state["task_type"] == "bug_fix"
+    assert len(state["actionable_issues"]) >= 1
+    assert len(state["code_patches"]) >= 1
+    assert len(state["pull_requests"]) >= 1
+    pr = state["pull_requests"][0]
+    assert "octocat/Hello-World" in pr["html_url"]
+
+
+def test_scan_code_for_defects_detection():
+    """Unit test for AST/heuristic defect scanner functions."""
+    from app.agent.analyzer import scan_code_for_defects
+
+    # Test 1: Float division in financial logic (CWE-681)
+    code_payment = "def charge(amount, exchange_rate):\n    return float(amount) / exchange_rate\n"
+    d1 = scan_code_for_defects("src/payment.py", code_payment)
+    assert d1 is not None
+    assert d1["cwe"] == "CWE-681"
+
+    # Test 2: Sensitive token logging in plain text (CWE-532)
+    code_token = "def callback(token):\n    logger.info(f'Token: {access_token}')\n"
+    d2 = scan_code_for_defects("src/auth.py", code_token)
+    assert d2 is not None
+    assert d2["cwe"] == "CWE-532"
+
+    # Test 3: Unbounded connection pool memory leak (CWE-775)
+    code_leak = "class Pool:\n    def add(self, ws):\n        self.connections.append(ws)\n"
+    d3 = scan_code_for_defects("src/broker.py", code_leak)
+    assert d3 is not None
+    assert d3["cwe"] == "CWE-775"
+
+

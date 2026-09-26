@@ -111,41 +111,41 @@ st.markdown("#### ⚡ Autonomous Software Engineering Tasks")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    if st.button("💳 1. Fix Payment 500 Bug (#102)", use_container_width=True):
+    if st.button("🌐 1. Scan Public Repo & Open PRs", use_container_width=True):
+        st.session_state["user_prompt"] = (
+            "Check the given public repo https://github.com/octocat/Hello-World, "
+            "find bugs in the codebase, fix them, open pull requests, and create Jira tasks."
+        )
+
+with col2:
+    if st.button("💳 2. Fix Payment 500 Bug (#102)", use_container_width=True):
         st.session_state["user_prompt"] = (
             "Check the repo, find the payment gateway 500 bug #102, "
             "fix the code in payment_service.py, open a pull request, create a Jira task, and notify Slack."
         )
 
-with col2:
-    if st.button("🔒 2. Fix Auth Token Leak (#101)", use_container_width=True):
+with col3:
+    if st.button("🔒 3. Fix Auth Token Leak (#101)", use_container_width=True):
         st.session_state["user_prompt"] = (
             "Check the repo, find the OAuth token leak security vulnerability #101, "
             "fix the code in oauth_handler.py, open a pull request, create a Jira task, and notify Slack."
         )
 
-with col3:
-    if st.button("⚡ 3. Fix Memory Leak (#103)", use_container_width=True):
+with col4:
+    if st.button("⚡ 4. Fix Memory Leak (#103)", use_container_width=True):
         st.session_state["user_prompt"] = (
             "Check the repo, find the WebSocket connection pool memory leak #103, "
             "fix the code in broker.py, open a pull request, create a Jira task, and notify Slack."
         )
 
-with col4:
-    if st.button("🤖 4. Autonomous Bug Sweep (All)", use_container_width=True):
-        st.session_state["user_prompt"] = (
-            "Check the repo, find all critical bugs, "
-            "fix each of them in the codebase, open pull requests, create Jira tasks, and notify Slack."
-        )
-
 default_prompt = st.session_state.get(
     "user_prompt",
-    "Check the repo, find the payment gateway 500 bug #102, "
-    "fix the code in payment_service.py, open a pull request, create a Jira task, and notify Slack.",
+    "Check the given public repo https://github.com/octocat/Hello-World, "
+    "find the bug in it, fix it, open a pull request, create a Jira task, and notify Slack.",
 )
 
 user_request = st.text_area(
-    "Enter natural-language engineering task for DevPilot:",
+    "Enter natural-language engineering task for DevPilot (supports any public GitHub repo URL):",
     value=default_prompt,
     height=90,
 )

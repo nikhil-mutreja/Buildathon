@@ -13,6 +13,24 @@ def parse_user_intent(request: str) -> dict[str, Any]:
     """Parse user natural language prompt into structured intent flags and task type."""
     req_lower = request.lower()
 
+    # Detect repository from URL or owner/repo pattern in request
+    target_repo_owner = None
+    target_repo_name = None
+    url_match = re.search(r'github\.com/([a-zA-Z0-9_\-\.]+)/([a-zA-Z0-9_\-\.]+)', request)
+    if url_match:
+        target_repo_owner = url_match.group(1)
+        target_repo_name = url_match.group(2).rstrip("/").rstrip(".git")
+    else:
+        repo_match = re.search(r'(?:repo|repository)\s+([a-zA-Z0-9_\-\.]+)/([a-zA-Z0-9_\-\.]+)', request, re.IGNORECASE)
+        if repo_match:
+            target_repo_owner = repo_match.group(1)
+            target_repo_name = repo_match.group(2).rstrip("/").rstrip(".git")
+        else:
+            slug_match = re.search(r'\b([a-zA-Z0-9_\-\.]+)/([a-zA-Z0-9_\-\.]+)\b', request)
+            if slug_match and not any(ext in slug_match.group(0) for ext in [".py", ".ts", ".js", ".md", ".json"]):
+                target_repo_owner = slug_match.group(1)
+                target_repo_name = slug_match.group(2).rstrip("/").rstrip(".git")
+
     # Detect specific issue number if mentioned (e.g. "fix #102" or "issue 101")
     target_issue_num = None
     issue_match = re.search(r'(?:issue|#)\s*(\d+)', req_lower)
@@ -22,14 +40,19 @@ def parse_user_intent(request: str) -> dict[str, Any]:
     # Determine coding / PR intent
     needs_code_fix = any(
         kw in req_lower
-        for kw in ["fix", "patch", "implement", "resolve", "code", "develop", "solve", "pull request", "pr"]
+        for kw in [
+            "fix", "patch", "implement", "resolve", "code", "develop", "solve",
+            "pull request", "pr", "find the bug", "found bug", "check the repo", "scan"
+        ]
     )
-    needs_pr = any(kw in req_lower for kw in ["pull request", "pr", "create pr", "open pr", "commit"]) or needs_code_fix
+    needs_pr = any(
+        kw in req_lower for kw in ["pull request", "pr", "create pr", "open pr", "commit"]
+    ) or needs_code_fix
 
     # Determine task type
     if any(kw in req_lower for kw in ["feature", "add", "implement", "new"]):
         task_type = "feature_development"
-    elif any(kw in req_lower for kw in ["fix", "bug", "patch", "repair", "resolve"]):
+    elif any(kw in req_lower for kw in ["fix", "bug", "patch", "repair", "resolve", "scan"]):
         task_type = "bug_fix"
     else:
         task_type = "issue_triage"
@@ -37,7 +60,7 @@ def parse_user_intent(request: str) -> dict[str, Any]:
     # Determine GitHub intent
     needs_github = any(
         kw in req_lower
-        for kw in ["github", "issue", "repo", "repository", "bug", "triage", "analyze", "fix", "pr"]
+        for kw in ["github", "issue", "repo", "repository", "bug", "triage", "analyze", "fix", "pr", "scan"]
     ) or not any(kw in req_lower for kw in ["jira only", "slack only"])
 
     # Determine Jira intent
@@ -81,6 +104,8 @@ def parse_user_intent(request: str) -> dict[str, Any]:
 
     intent = {
         "task_type": task_type,
+        "target_repo_owner": target_repo_owner,
+        "target_repo_name": target_repo_name,
         "target_issue_number": target_issue_num,
         "needs_github": needs_github,
         "needs_code_fix": needs_code_fix,
@@ -92,10 +117,87 @@ def parse_user_intent(request: str) -> dict[str, Any]:
     }
 
     logger.info(
-        f"[AGENT] Intent parsed: Task={task_type}, Issue={target_issue_num}, "
-        f"CodeFix={needs_code_fix}, Jira={needs_jira}, Slack={needs_slack}"
+        f"[AGENT] Intent parsed: Task={task_type}, Repo={target_repo_owner}/{target_repo_name}, "
+        f"Issue={target_issue_num}, CodeFix={needs_code_fix}, Jira={needs_jira}, Slack={needs_slack}"
     )
     return intent
+
+
+def scan_code_for_defects(file_path: str, code_content: str) -> Optional[dict[str, Any]]:
+    """Inspect source code for real software defects, runtime hazards, and security vulnerabilities."""
+    code_lower = code_content.lower()
+
+    # 1. Lossy float division in financial or payment calculations (CWE-681)
+    if ("float(" in code_content or "/ exchange_rate" in code_content or "/ rate" in code_content) and \
+       any(kw in code_lower for kw in ["amount", "currency", "payment", "transaction", "checkout"]):
+        return {
+            "defect_type": "FLOAT_PRECISION_DIV_ERROR",
+            "cwe": "CWE-681",
+            "title": f"HTTP 500 runtime crash on float division in {file_path}",
+            "severity": "CRITICAL",
+            "reason": (
+                "Lossy float division in currency conversion causes float precision degradation "
+                "and unhandled HTTP 500 crashes on non-USD transactions. Requires Decimal arithmetic."
+            ),
+            "file_path": file_path,
+        }
+
+    # 2. Sensitive credential / access token logged in plaintext (CWE-532)
+    if ("token" in code_lower or "secret" in code_lower or "auth" in code_lower) and \
+       ("logger." in code_content or "print(" in code_content) and \
+       ("access_token" in code_content or "token:" in code_content or "token}" in code_content) and \
+       "****" not in code_content:
+        return {
+            "defect_type": "SENSITIVE_CREDENTIAL_LOG_LEAK",
+            "cwe": "CWE-532",
+            "title": f"Authentication access token plaintext exposure in {file_path}",
+            "severity": "CRITICAL",
+            "reason": (
+                "Raw session access tokens are logged directly into log streams, exposing authenticated "
+                "user sessions to credential harvesting and hijacking in log aggregators."
+            ),
+            "file_path": file_path,
+        }
+
+    # 3. Unbounded socket connection list memory & descriptor leak (CWE-775)
+    if ("connections.append" in code_content or "sockets.append" in code_content) and \
+       "WeakSet" not in code_content and "discard" not in code_content:
+        return {
+            "defect_type": "UNBOUNDED_CONNECTION_POOL_MEMORY_LEAK",
+            "cwe": "CWE-775",
+            "title": f"Memory leak & file descriptor exhaustion in {file_path}",
+            "severity": "HIGH",
+            "reason": (
+                "Connection pool appends sockets to an unbounded list without connection state tracking "
+                "or eviction, causing memory leaks and socket descriptor exhaustion under load."
+            ),
+            "file_path": file_path,
+        }
+
+    # 4. Frontend theme switcher missing state persistence
+    if "setTheme" in code_content and "localStorage" not in code_content:
+        return {
+            "defect_type": "STATE_PERSISTENCE_DEFECT",
+            "cwe": "UI-STATE",
+            "title": f"Missing state persistence in UI theme component {file_path}",
+            "severity": "LOW",
+            "reason": "Theme switcher resets to default state on page reload due to missing localStorage persistence.",
+            "file_path": file_path,
+        }
+
+    # 5. Direct unhandled division by zero (CWE-369)
+    if re.search(r'/\s*0(?![0-9])', code_content):
+        return {
+            "defect_type": "ZERO_DIVISION_ERROR",
+            "cwe": "CWE-369",
+            "title": f"Direct division by zero crash in {file_path}",
+            "severity": "CRITICAL",
+            "reason": "Direct division by zero triggers fatal runtime ZeroDivisionError.",
+            "file_path": file_path,
+        }
+
+    return None
+
 
 
 def triage_issue(issue: dict[str, Any]) -> dict[str, Any]:

@@ -10,6 +10,7 @@ from app.agent.state import DevPilotState
 from app.agent.analyzer import (
     parse_user_intent,
     triage_issue,
+    scan_code_for_defects,
     diagnose_and_generate_patch,
     should_create_jira,
     should_send_slack,
@@ -34,7 +35,13 @@ def understand_request_node(state: DevPilotState) -> dict[str, Any]:
     plan = intent.get("plan", [])
     task_type = intent.get("task_type", "issue_triage")
 
+    repo_owner = intent.get("target_repo_owner") or state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
+    repo_name = intent.get("target_repo_name") or state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
+
     decisions = state.get("decisions", [])
+    if intent.get("target_repo_owner") and intent.get("target_repo_name"):
+        decisions.append(f"Target public repository identified from request: `{repo_owner}/{repo_name}`.")
+
     decisions.append(
         f"Task categorized as `{task_type}`. Intent: GitHub={intent['needs_github']}, "
         f"CodeFix={intent['needs_code_fix']}, PR={intent['needs_pr']}, "
@@ -42,9 +49,11 @@ def understand_request_node(state: DevPilotState) -> dict[str, Any]:
     )
 
     actions = state.get("actions_taken", [])
-    actions.append(f"Request understood: '{task_type}' task initialized with {len(selected_tools)} Swytchcode tools.")
+    actions.append(f"Request understood: '{task_type}' task initialized for `{repo_owner}/{repo_name}` with {len(selected_tools)} Swytchcode tools.")
 
     return {
+        "repo_owner": repo_owner,
+        "repo_name": repo_name,
         "task_type": task_type,
         "intent": intent,
         "selected_tools": selected_tools,
@@ -90,17 +99,22 @@ def fetch_github_node(state: DevPilotState) -> dict[str, Any]:
 
 
 def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
-    """Triage and classify issues, mapping them to codebase files."""
+    """Triage repository issues and proactively scan codebase files for bugs."""
     raw_issues = state.get("github_results", [])
     intent = state.get("intent", {})
     target_num = intent.get("target_issue_number")
+    owner = state.get("repo_owner") or os.getenv("GITHUB_REPO_OWNER", "octocat")
+    repo = state.get("repo_name") or os.getenv("GITHUB_REPO_NAME", "Hello-World")
+    mode = state.get("app_mode") or os.getenv("APP_MODE", "mock")
 
+    client = SwytchcodeClient(mode=mode)
     decisions = state.get("decisions", [])
     actions = state.get("actions_taken", [])
 
     analyzed = []
     actionable = []
 
+    # 1. Triage existing GitHub issues if present
     for issue in raw_issues:
         result = triage_issue(issue)
         # If user targeted a specific issue, prioritize it
@@ -116,11 +130,50 @@ def analyze_issues_node(state: DevPilotState) -> dict[str, Any]:
         if filtered:
             actionable = filtered
 
+    # 2. Autonomous Code Defect Scan: If no issues or if user requested finding bugs in repo
+    if not actionable or (intent.get("needs_code_fix", False) and not target_num):
+        decisions.append(f"Scanning codebase files in `{owner}/{repo}` for latent bugs and security vulnerabilities.")
+        repo_files = client.list_repository_files(owner=owner, repo=repo)
+        scan_idx = 1
+        for fpath in repo_files:
+            try:
+                f_res = client.get_repository_file(owner=owner, repo=repo, path=fpath)
+                raw_text = f_res.get("raw_text") or ""
+                if not raw_text and "content" in f_res:
+                    raw_text = base64.b64decode(f_res["content"]).decode("utf-8", errors="ignore")
+                defect = scan_code_for_defects(fpath, raw_text)
+                if defect:
+                    # Avoid duplicate if file is already tracked
+                    if not any(a.get("file_path") == fpath for a in actionable):
+                        is_act = defect["severity"] in ("CRITICAL", "HIGH")
+                        defect_item = {
+                            "id": 2000 + scan_idx,
+                            "number": 100 + scan_idx,
+                            "title": f"[{defect['cwe']}] {defect['title']}",
+                            "body": defect["reason"],
+                            "html_url": f"https://github.com/{owner}/{repo}/blob/main/{fpath}",
+                            "author": "devpilot-scanner",
+                            "labels": ["bug", defect["severity"].lower(), defect["cwe"].lower()],
+                            "file_path": fpath,
+                            "severity": defect["severity"],
+                            "is_actionable": is_act,
+                            "reason": defect["reason"],
+                            "jira_ticket_key": None,
+                            "pull_request_number": None,
+                        }
+                        analyzed.append(defect_item)
+                        if is_act:
+                            actionable.append(defect_item)
+                            actions.append(f"Code scanner detected defect {defect['cwe']} in `{fpath}`.")
+                        scan_idx += 1
+            except Exception as e:
+                logger.warning(f"Could not scan file {fpath}: {e}")
+
     decisions.append(
-        f"Issue triage complete: {len(analyzed)} issue(s) inspected, "
-        f"{len(actionable)} actionable item(s) mapped to codebase."
+        f"Repository inspection complete: {len(analyzed)} item(s) inspected, "
+        f"{len(actionable)} actionable bug(s) identified in `{owner}/{repo}`."
     )
-    actions.append(f"Analyzed {len(analyzed)} issues: identified {len(actionable)} actionable tasks.")
+    actions.append(f"Analyzed {len(analyzed)} items: identified {len(actionable)} actionable tasks.")
 
     return {
         "analyzed_issues": analyzed,
