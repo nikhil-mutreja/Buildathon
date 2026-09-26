@@ -10,7 +10,7 @@ import streamlit as st
 from app.agent.graph import run_devpilot_agent
 
 st.set_page_config(
-    page_title="DevPilot — Autonomous AI Software Engineering Agent",
+    page_title="DevPilot — Autonomous AI Software Engineer",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -50,21 +50,6 @@ st.markdown(
         display: inline-block;
         border: 1px solid #c3e6cb;
     }
-    .step-box {
-        background: #f8f9fa;
-        border-left: 4px solid #007bff;
-        padding: 10px 14px;
-        margin: 6px 0;
-        border-radius: 0 4px 4px 0;
-        font-family: monospace;
-    }
-    .decision-box {
-        background: #eef7ff;
-        border-left: 4px solid #17a2b8;
-        padding: 8px 12px;
-        margin: 4px 0;
-        border-radius: 0 4px 4px 0;
-    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -101,15 +86,18 @@ with st.sidebar:
     slack_channel = st.text_input("Slack Channel", value=os.getenv("SLACK_CHANNEL", "#dev-alerts"))
 
     st.markdown("---")
-    st.subheader("Swytchcode Integrations")
+    st.subheader("Swytchcode Tool Capabilities")
     st.markdown(
         """
-        - **GitHub**: `github.issue.get1`
-        - **Jira**: `jira.api.issue.create`
-        - **Slack**: `slack.chat.postmessage.create`
+        - 📂 **Codebase**: `github.content.get`
+        - ✏️ **Commit**: `github.content.update`
+        - 🔀 **Pull Request**: `github.pull.create`
+        - 🐛 **Issues**: `github.issue.get1`
+        - 📋 **Jira Tasks**: `jira.api.issue.create`
+        - 💬 **Slack Alerts**: `slack.chat.postmessage.create`
         """
     )
-    st.caption("Registered in `.swytchcode/tooling.json`")
+    st.caption("Active in `.swytchcode/tooling.json`")
 
 # Header
 st.markdown('<div class="main-title">DevPilot</div>', unsafe_allow_html=True)
@@ -119,44 +107,53 @@ st.markdown(
 )
 
 # Demo Quick Prompts
-st.markdown("#### ⚡ Quick Demo Prompts for Hackathon Judges")
-col1, col2, col3 = st.columns(3)
+st.markdown("#### ⚡ Autonomous Software Engineering Tasks")
+col1, col2, col3, col4 = st.columns(4)
 
-prompt_input = ""
 with col1:
-    if st.button("1. GitHub Triage Only", use_container_width=True):
+    if st.button("🛠️ Fix Bug & Open PR", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Analyze my GitHub issues, evaluate severity, and report actionable findings."
+            "Investigate and fix bug #102: payment gateway 500 error on checkout, "
+            "open a pull request with the fix, create a Jira task, and notify Slack."
         )
 
 with col2:
-    if st.button("2. GitHub + Jira Creation", use_container_width=True):
+    if st.button("🔒 Security Remediation", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Find critical GitHub issues and create appropriate Jira tasks for our engineering backlog."
+            "Remediate critical security vulnerability #101: token leakage in OAuth callback, "
+            "generate code patch, open PR, track in Jira, and alert the team on Slack."
         )
 
 with col3:
-    if st.button("3. Full Multi-Step Flow", use_container_width=True):
+    if st.button("✨ Feature Development", use_container_width=True):
         st.session_state["user_prompt"] = (
-            "Analyze critical GitHub issues, create Jira tasks, and notify the development team on Slack."
+            "Implement dark mode theme switcher #105, commit the frontend changes, "
+            "create a pull request, create a Jira ticket, and notify Slack."
+        )
+
+with col4:
+    if st.button("📋 Repo Triage & Tracking", use_container_width=True):
+        st.session_state["user_prompt"] = (
+            "Analyze latest GitHub repository issues, identify critical items, "
+            "create Jira tasks, and notify the team on Slack."
         )
 
 default_prompt = st.session_state.get(
     "user_prompt",
-    "Analyze the latest issues in my GitHub repository, identify the critical or actionable issues, "
-    "create appropriate Jira tasks for those issues, and notify the relevant development team on Slack.",
+    "Investigate and fix bug #102: payment gateway 500 error on checkout, "
+    "open a pull request with the fix, create a Jira task, and notify Slack.",
 )
 
 user_request = st.text_area(
-    "Enter natural-language instruction for DevPilot:",
+    "Enter natural-language engineering task for DevPilot:",
     value=default_prompt,
     height=90,
 )
 
-run_button = st.button("🚀 Run Agent", type="primary", use_container_width=True)
+run_button = st.button("🚀 Run AI Software Engineer", type="primary", use_container_width=True)
 
 if run_button and user_request:
-    with st.spinner("DevPilot LangGraph Agent executing multi-step workflow..."):
+    with st.spinner("DevPilot AI Software Engineer executing end-to-end coding workflow..."):
         result = run_devpilot_agent(
             user_request=user_request,
             repo_owner=repo_owner,
@@ -169,31 +166,60 @@ if run_button and user_request:
     st.markdown("---")
 
     # Workflow Status
-    st.subheader("🔄 Agent Workflow Execution")
-    col_a, col_b, col_c, col_d = st.columns(4)
+    st.subheader("📊 Engineering Workflow Execution Results")
+    col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
     with col_a:
-        st.metric("Issues Triaged", len(result.get("analyzed_issues", [])))
+        st.metric("Issues Inspected", len(result.get("analyzed_issues", [])))
     with col_b:
-        st.metric("Actionable Found", len(result.get("actionable_issues", [])))
+        st.metric("Actionable Items", len(result.get("actionable_issues", [])))
     with col_c:
-        st.metric("Jira Tasks Created", len(result.get("jira_results", [])))
+        st.metric("Code Patches", len(result.get("code_patches", [])))
     with col_d:
-        st.metric("Slack Alerts Sent", len(result.get("slack_results", [])))
+        st.metric("PRs Opened", len(result.get("pull_requests", [])))
+    with col_e:
+        st.metric("Jira Tasks", len(result.get("jira_results", [])))
+    with col_f:
+        st.metric("Slack Alerts", len(result.get("slack_results", [])))
 
     # Selected Tools & Intent
     intent = result.get("intent", {})
     selected_tools = result.get("selected_tools", [])
     st.markdown(
-        f"**Tools Selected by Agent:** `{', '.join(selected_tools) or 'None'}`"
+        f"**Task Type:** `{result.get('task_type')}` | **Swytchcode Tools Invoked:** `{', '.join(selected_tools) or 'None'}`"
     )
 
-    # Decisions & Actions Taken
-    tab1, tab2, tab3, tab4 = st.tabs(["📋 Executive Summary", "🔍 Triaged Issues", "🔗 Traceability Matrix", "📜 Decisions & Audit Trail"])
+    # Tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📋 Executive Summary",
+        "💻 Code Patches & PRs",
+        "🔍 Triaged Issues",
+        "🔗 Traceability Matrix",
+        "📜 Decisions & Audit Trail",
+    ])
 
     with tab1:
         st.markdown(result.get("final_response", "Workflow completed."))
 
     with tab2:
+        patches = result.get("code_patches", [])
+        prs = result.get("pull_requests", [])
+        if patches:
+            for patch in patches:
+                st.markdown(f"#### 📄 File: `{patch['file_path']}` (Target Issue #{patch['github_issue_number']})")
+                st.info(f"💡 **Diagnosis & Solution**: {patch['explanation']}")
+                
+                # Associated PR
+                for pr in prs:
+                    if f"#{patch['github_issue_number']}" in pr.get("title", ""):
+                        st.success(f"🔀 **Pull Request Opened:** [{pr.get('title')}]({pr.get('html_url')}) (`#{pr.get('number')}`)")
+
+                st.markdown("**Unified Diff:**")
+                st.code(patch["diff"], language="diff")
+                st.markdown("---")
+        else:
+            st.info("No code patches generated for this request.")
+
+    with tab3:
         analyzed = result.get("analyzed_issues", [])
         if analyzed:
             for item in analyzed:
@@ -207,31 +233,39 @@ if run_button and user_request:
                     st.markdown(f"**Classification:** `{sev}`")
                     st.markdown(f"**Actionable:** `{'Yes' if item['is_actionable'] else 'No'}`")
                     st.markdown(f"**Triage Reason:** {item['reason']}")
+                    st.markdown(f"**Target Codebase File:** `{item.get('file_path', 'N/A')}`")
                     if item.get("jira_ticket_key"):
                         st.markdown(f"**Linked Jira Task:** `{item['jira_ticket_key']}`")
+                    if item.get("pull_request_number"):
+                        st.markdown(f"**Linked Pull Request:** `PR #{item['pull_request_number']}`")
                     st.markdown(f"**Labels:** {', '.join(item.get('labels', [])) or 'None'}")
                     st.caption(f"Author: @{item.get('author', 'unknown')} | Link: {item.get('html_url', '')}")
         else:
             st.info("No issues retrieved.")
 
-    with tab3:
+    with tab4:
         actionable = result.get("actionable_issues", [])
+        patches = result.get("code_patches", [])
         if actionable:
             table_data = []
             for item in actionable:
+                has_patch = "✅ Generated" if any(p["github_issue_number"] == item["number"] for p in patches) else "—"
+                pr_num = item.get("pull_request_number")
+                pr_str = f"PR #{pr_num}" if pr_num else "—"
                 table_data.append({
                     "GitHub Issue": f"#{item['number']}",
-                    "Title": item["title"],
                     "Severity": item["severity"],
-                    "Jira Task": item.get("jira_ticket_key", "Skipped / None"),
-                    "Slack Alert": "Dispatched" if result.get("slack_results") else "Skipped / None",
+                    "Code Patch": has_patch,
+                    "Pull Request": pr_str,
+                    "Jira Task": item.get("jira_ticket_key", "—"),
+                    "Slack Alert": "Dispatched" if result.get("slack_results") else "—",
                 })
             st.table(table_data)
         else:
             st.info("No actionable issues identified.")
 
-    with tab4:
-        st.markdown("#### Decisions Made by Agent")
+    with tab5:
+        st.markdown("#### Decisions Made by AI Software Engineer")
         for d in result.get("decisions", []):
             st.markdown(f"- 💡 {d}")
 
