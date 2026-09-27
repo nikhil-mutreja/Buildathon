@@ -797,6 +797,106 @@
       "summary": "Create a reference",
       "type": "method"
     },
+    "github.git.trees.get": {
+      "desc": "Returns a single tree using the SHA1 value or ref name for that tree.\n\nIf `truncated` is `true` in the response then the number of items in the `tree` array exceeded our maximum limit. If you need to fetch more items, use the non-recursive method of fetching trees, and fetch one sub-tree at a time.\n\n\u003e [!NOTE]\n\u003e The limit for the `tree` array is 100,000 entries with a maximum size of 7 MB when using the `recursive` parameter.",
+      "inputs": [
+        {
+          "owner": {
+            "LOCATION": "path",
+            "REQUIRED": true,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "repo": {
+            "LOCATION": "path",
+            "REQUIRED": true,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "tree_sha": {
+            "LOCATION": "path",
+            "REQUIRED": true,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "recursive": {
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        }
+      ],
+      "integration": "GitHub.github@1.1.4",
+      "method_hash": "911ed96662e329ade3998d646cd7b253eb507abbe3d3ce4d30ec7c996e8d966b",
+      "output": {
+        "schema": {
+          "properties": {
+            "sha": {
+              "required": true,
+              "type": "string"
+            },
+            "tree": {
+              "items": {
+                "properties": {
+                  "mode": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "path": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "sha": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "size": {
+                    "required": false,
+                    "type": "integer"
+                  },
+                  "type": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "url": {
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "mode",
+                  "type",
+                  "sha"
+                ],
+                "type": "object"
+              },
+              "required": true,
+              "type": "array"
+            },
+            "truncated": {
+              "required": true,
+              "type": "boolean"
+            },
+            "url": {
+              "required": false,
+              "type": "string"
+            }
+          },
+          "required": [
+            "sha",
+            "truncated",
+            "tree"
+          ]
+        },
+        "status": 200
+      },
+      "summary": "Get a tree",
+      "type": "method"
+    },
     "github.issue.get1": {
       "desc": "List issues in a repository. Only open issues will be listed.\n\n\u003e [!NOTE]\n\u003e GitHub's REST API considers every pull request an issue, but not every issue is a pull request. For this reason, \"Issues\" endpoints may return both issues and pull requests in the response. You can identify pull requests by the `pull_request` key. Be aware that the `id` of a pull request returned from \"Issues\" endpoints will be an _issue id_. To find out the pull request id, use the \"[List pull requests](https://docs.github.com/rest/pulls/pulls#list-pull-requests)\" endpoint.\n\nThis endpoint supports the following custom media types. For more information, see \"[Media types](https://docs.github.com/rest/using-the-rest-api/getting-started-with-the-rest-api#media-types).\"\n\n- **`application/vnd.github.raw+json`**: Returns the raw markdown body. Response will include `body`. This is the default if you do not pass any specific media type.\n- **`application/vnd.github.text+json`**: Returns a text only representation of the markdown body. Response will include `body_text`.\n- **`application/vnd.github.html+json`**: Returns HTML rendered from the body's markdown. Response will include `body_html`.\n- **`application/vnd.github.full+json`**: Returns raw, text, and HTML representations. Response will include `body`, `body_text`, and `body_html`.",
       "inputs": [
@@ -6579,6 +6679,788 @@
         "status": 201
       },
       "summary": "Create a pull request",
+      "type": "method"
+    },
+    "github.repo.get": {
+      "desc": "Lists repositories for the specified organization.\n\n\u003e [!NOTE]\n\u003e In order to see the `security_and_analysis` block for a repository you must have admin permissions for the repository or be an owner or security manager for the organization that owns the repository. For more information, see \"[Managing security managers in your organization](https://docs.github.com/organizations/managing-peoples-access-to-your-organization-with-roles/managing-security-managers-in-your-organization).\"",
+      "inputs": [
+        {
+          "org": {
+            "LOCATION": "path",
+            "REQUIRED": true,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "type": {
+            "DEFAULT": "all",
+            "ENUM": [
+              "all",
+              "public",
+              "private",
+              "forks",
+              "sources",
+              "member"
+            ],
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "sort": {
+            "DEFAULT": "created",
+            "ENUM": [
+              "created",
+              "updated",
+              "pushed",
+              "full_name"
+            ],
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "direction": {
+            "ENUM": [
+              "asc",
+              "desc"
+            ],
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "STRING"
+          }
+        },
+        {
+          "per_page": {
+            "DEFAULT": 30,
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "INT"
+          }
+        },
+        {
+          "page": {
+            "DEFAULT": 1,
+            "LOCATION": "query",
+            "REQUIRED": false,
+            "TYPE": "INT"
+          }
+        }
+      ],
+      "integration": "GitHub.github@1.1.4",
+      "method_hash": "a582b63a25b180f27d13a4c99b3753b60f7007010a9b23e5813136183aac550f",
+      "output": {
+        "schema": {
+          "items": {
+            "properties": {
+              "allow_forking": {
+                "required": false,
+                "type": "boolean"
+              },
+              "archive_url": {
+                "required": true,
+                "type": "string"
+              },
+              "archived": {
+                "required": false,
+                "type": "boolean"
+              },
+              "assignees_url": {
+                "required": true,
+                "type": "string"
+              },
+              "blobs_url": {
+                "required": true,
+                "type": "string"
+              },
+              "branches_url": {
+                "required": true,
+                "type": "string"
+              },
+              "clone_url": {
+                "required": false,
+                "type": "string"
+              },
+              "code_of_conduct": {
+                "properties": {
+                  "body": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "html_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "key": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "name": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "url": {
+                    "required": true,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "name",
+                  "url",
+                  "html_url"
+                ],
+                "type": "object"
+              },
+              "collaborators_url": {
+                "required": true,
+                "type": "string"
+              },
+              "comments_url": {
+                "required": true,
+                "type": "string"
+              },
+              "commits_url": {
+                "required": true,
+                "type": "string"
+              },
+              "compare_url": {
+                "required": true,
+                "type": "string"
+              },
+              "contents_url": {
+                "required": true,
+                "type": "string"
+              },
+              "contributors_url": {
+                "required": true,
+                "type": "string"
+              },
+              "created_at": {
+                "required": false,
+                "type": "TIMESTAMP"
+              },
+              "custom_properties": {
+                "required": false,
+                "type": "map[STRING]ANY"
+              },
+              "default_branch": {
+                "required": false,
+                "type": "string"
+              },
+              "delete_branch_on_merge": {
+                "required": false,
+                "type": "boolean"
+              },
+              "deployments_url": {
+                "required": true,
+                "type": "string"
+              },
+              "description": {
+                "required": true,
+                "type": "string"
+              },
+              "disabled": {
+                "required": false,
+                "type": "boolean"
+              },
+              "downloads_url": {
+                "required": true,
+                "type": "string"
+              },
+              "events_url": {
+                "required": true,
+                "type": "string"
+              },
+              "fork": {
+                "required": true,
+                "type": "boolean"
+              },
+              "forks": {
+                "required": false,
+                "type": "integer"
+              },
+              "forks_count": {
+                "required": false,
+                "type": "integer"
+              },
+              "forks_url": {
+                "required": true,
+                "type": "string"
+              },
+              "full_name": {
+                "required": true,
+                "type": "string"
+              },
+              "git_commits_url": {
+                "required": true,
+                "type": "string"
+              },
+              "git_refs_url": {
+                "required": true,
+                "type": "string"
+              },
+              "git_tags_url": {
+                "required": true,
+                "type": "string"
+              },
+              "git_url": {
+                "required": false,
+                "type": "string"
+              },
+              "has_discussions": {
+                "required": false,
+                "type": "boolean"
+              },
+              "has_downloads": {
+                "required": false,
+                "type": "boolean"
+              },
+              "has_issues": {
+                "required": false,
+                "type": "boolean"
+              },
+              "has_pages": {
+                "required": false,
+                "type": "boolean"
+              },
+              "has_projects": {
+                "required": false,
+                "type": "boolean"
+              },
+              "has_pull_requests": {
+                "required": false,
+                "type": "boolean"
+              },
+              "has_wiki": {
+                "required": false,
+                "type": "boolean"
+              },
+              "homepage": {
+                "required": false,
+                "type": "string"
+              },
+              "hooks_url": {
+                "required": true,
+                "type": "string"
+              },
+              "html_url": {
+                "required": true,
+                "type": "string"
+              },
+              "id": {
+                "required": true,
+                "type": "integer"
+              },
+              "is_template": {
+                "required": false,
+                "type": "boolean"
+              },
+              "issue_comment_url": {
+                "required": true,
+                "type": "string"
+              },
+              "issue_events_url": {
+                "required": true,
+                "type": "string"
+              },
+              "issues_url": {
+                "required": true,
+                "type": "string"
+              },
+              "keys_url": {
+                "required": true,
+                "type": "string"
+              },
+              "labels_url": {
+                "required": true,
+                "type": "string"
+              },
+              "language": {
+                "required": false,
+                "type": "string"
+              },
+              "languages_url": {
+                "required": true,
+                "type": "string"
+              },
+              "license": {
+                "properties": {
+                  "key": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "name": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "spdx_id": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "url": {
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "merges_url": {
+                "required": true,
+                "type": "string"
+              },
+              "milestones_url": {
+                "required": true,
+                "type": "string"
+              },
+              "mirror_url": {
+                "required": false,
+                "type": "string"
+              },
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "network_count": {
+                "required": false,
+                "type": "integer"
+              },
+              "node_id": {
+                "required": true,
+                "type": "string"
+              },
+              "notifications_url": {
+                "required": true,
+                "type": "string"
+              },
+              "open_issues": {
+                "required": false,
+                "type": "integer"
+              },
+              "open_issues_count": {
+                "required": false,
+                "type": "integer"
+              },
+              "owner": {
+                "properties": {
+                  "avatar_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "email": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "events_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "followers_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "following_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "gists_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "gravatar_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "html_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "id": {
+                    "required": true,
+                    "type": "integer"
+                  },
+                  "login": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "name": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "organizations_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "received_events_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "repos_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "site_admin": {
+                    "required": true,
+                    "type": "boolean"
+                  },
+                  "starred_at": {
+                    "required": false,
+                    "type": "string"
+                  },
+                  "starred_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "subscriptions_url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "type": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "url": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "user_view_type": {
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "login",
+                  "id",
+                  "node_id",
+                  "avatar_url",
+                  "gravatar_id",
+                  "url",
+                  "html_url",
+                  "followers_url",
+                  "following_url",
+                  "gists_url",
+                  "starred_url",
+                  "subscriptions_url",
+                  "organizations_url",
+                  "repos_url",
+                  "events_url",
+                  "received_events_url",
+                  "type",
+                  "site_admin"
+                ],
+                "type": "object"
+              },
+              "permissions": {
+                "properties": {
+                  "admin": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "maintain": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "pull": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "push": {
+                    "required": false,
+                    "type": "boolean"
+                  },
+                  "triage": {
+                    "required": false,
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "private": {
+                "required": true,
+                "type": "boolean"
+              },
+              "pull_request_creation_policy": {
+                "required": false,
+                "type": "string"
+              },
+              "pulls_url": {
+                "required": true,
+                "type": "string"
+              },
+              "pushed_at": {
+                "required": false,
+                "type": "TIMESTAMP"
+              },
+              "releases_url": {
+                "required": true,
+                "type": "string"
+              },
+              "role_name": {
+                "required": false,
+                "type": "string"
+              },
+              "security_and_analysis": {
+                "properties": {
+                  "advanced_security": {
+                    "properties": {
+                      "status": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "code_security": {
+                    "properties": {
+                      "status": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "dependabot_security_updates": {
+                    "properties": {
+                      "status": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "secret_scanning": {
+                    "properties": {
+                      "status": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "secret_scanning_ai_detection": {
+                    "properties": {
+                      "status": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "secret_scanning_delegated_alert_dismissal": {
+                    "properties": {
+                      "status": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "secret_scanning_delegated_bypass": {
+                    "properties": {
+                      "status": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "secret_scanning_delegated_bypass_options": {
+                    "properties": {
+                      "reviewers": {
+                        "items": {
+                          "properties": {
+                            "mode": {
+                              "required": false,
+                              "type": "string"
+                            },
+                            "reviewer_id": {
+                              "required": true,
+                              "type": "integer"
+                            },
+                            "reviewer_type": {
+                              "required": true,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "reviewer_id",
+                            "reviewer_type"
+                          ],
+                          "type": "object"
+                        },
+                        "required": false,
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "secret_scanning_non_provider_patterns": {
+                    "properties": {
+                      "status": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "secret_scanning_push_protection": {
+                    "properties": {
+                      "status": {
+                        "required": false,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "size": {
+                "required": false,
+                "type": "integer"
+              },
+              "ssh_url": {
+                "required": false,
+                "type": "string"
+              },
+              "stargazers_count": {
+                "required": false,
+                "type": "integer"
+              },
+              "stargazers_url": {
+                "required": true,
+                "type": "string"
+              },
+              "statuses_url": {
+                "required": true,
+                "type": "string"
+              },
+              "subscribers_count": {
+                "required": false,
+                "type": "integer"
+              },
+              "subscribers_url": {
+                "required": true,
+                "type": "string"
+              },
+              "subscription_url": {
+                "required": true,
+                "type": "string"
+              },
+              "svn_url": {
+                "required": false,
+                "type": "string"
+              },
+              "tags_url": {
+                "required": true,
+                "type": "string"
+              },
+              "teams_url": {
+                "required": true,
+                "type": "string"
+              },
+              "temp_clone_token": {
+                "required": false,
+                "type": "string"
+              },
+              "topics": {
+                "required": false,
+                "type": "[]STRING"
+              },
+              "trees_url": {
+                "required": true,
+                "type": "string"
+              },
+              "updated_at": {
+                "required": false,
+                "type": "TIMESTAMP"
+              },
+              "url": {
+                "required": true,
+                "type": "string"
+              },
+              "visibility": {
+                "required": false,
+                "type": "string"
+              },
+              "watchers": {
+                "required": false,
+                "type": "integer"
+              },
+              "watchers_count": {
+                "required": false,
+                "type": "integer"
+              },
+              "web_commit_signoff_required": {
+                "required": false,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "node_id",
+              "name",
+              "full_name",
+              "owner",
+              "private",
+              "html_url",
+              "description",
+              "fork",
+              "url",
+              "archive_url",
+              "assignees_url",
+              "blobs_url",
+              "branches_url",
+              "collaborators_url",
+              "comments_url",
+              "commits_url",
+              "compare_url",
+              "contents_url",
+              "contributors_url",
+              "deployments_url",
+              "downloads_url",
+              "events_url",
+              "forks_url",
+              "git_commits_url",
+              "git_refs_url",
+              "git_tags_url",
+              "issue_comment_url",
+              "issue_events_url",
+              "issues_url",
+              "keys_url",
+              "labels_url",
+              "languages_url",
+              "merges_url",
+              "milestones_url",
+              "notifications_url",
+              "pulls_url",
+              "releases_url",
+              "stargazers_url",
+              "statuses_url",
+              "subscribers_url",
+              "subscription_url",
+              "tags_url",
+              "teams_url",
+              "trees_url",
+              "hooks_url"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "status": 200
+      },
+      "summary": "List organization repositories",
       "type": "method"
     },
     "jira.api.issue.create": {

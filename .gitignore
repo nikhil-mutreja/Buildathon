@@ -1,9 +1,10 @@
 node_modules
-__pycache__/
+.venv
+__pycache__
 *.pyc
-.pytest_cache/
-.venv/
-.swytchcode/audit/
-.swytchcode/cache/
+.pytest_cache
+.swytchcode/audit
+.swytchcode/cache
 .swytchcode/credentials.db
 .swytchcode/credkey
+.swytchcode/config.json

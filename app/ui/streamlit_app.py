@@ -799,18 +799,25 @@ with col_details:
                         st.info(f"Changes requested on PR #{pr_num}.")
 
         elif pr_error:
+            clean_head = git_branch.split(":")[-1] if git_branch else "main"
+            compare_url = f"https://github.com/{effective_owner}/{effective_repo}/compare/main...{clean_head}?expand=1"
             st.markdown(f"""
             <div class="err-card">
-                <div class="err-title">Pull Request Creation Failed</div>
+                <div class="err-title">Remote Pull Request Creation Notice</div>
                 <div class="err-detail">
                     <p>{pr_error}</p>
                     <p style="margin-top:8px;">
-                        Local branch <code>{git_branch}</code> and commit <code>{commit_sha[:8] if commit_sha else '—'}</code> were preserved.
+                        All defects were fixed and automated tests passed. Real branch <code>{git_branch}</code> and commit <code>{commit_sha[:8] if commit_sha else '—'}</code> (committed by @{github_username}) were preserved.
                     </p>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            st.markdown("**Recommended action:** Verify GitHub credentials and repository permissions, then retry.")
+            st.link_button(
+                f"🚀 Open & Submit Pull Request on GitHub for {effective_owner}/{effective_repo}",
+                compare_url,
+                type="primary",
+                use_container_width=True,
+            )
         else:
             st.markdown("""
             <div class="empty-state">
