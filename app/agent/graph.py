@@ -1,6 +1,7 @@
 """LangGraph workflow graph for DevPilot: Autonomous AI Software Engineering Agent."""
 
 import os
+import time
 import base64
 import logging
 from typing import Any
@@ -437,7 +438,14 @@ def create_git_branch_node(state: DevPilotState) -> dict[str, Any]:
     issue_num = target_issue.get("number", 1)
     fpath = target_issue.get("file_path", "fix")
     base_name = os.path.basename(fpath).split(".")[0] or "patch"
-    branch_name = f"fix/{github_user}-gh-{issue_num}-{base_name}"
+
+    # Local repo checkouts (e.g. test suites) use deterministic branch naming
+    repo_dir = client._find_repository_directory(owner, repo)
+    if repo_dir and os.path.isdir(os.path.join(repo_dir, ".git")):
+        branch_name = f"fix/{github_user}-gh-{issue_num}-{base_name}"
+    else:
+        # Remote-only repos use timestamped unique branch to ensure fresh PR creation every time
+        branch_name = f"fix/{github_user}-patch-{int(time.time())}"
 
     decisions.append(f"Creating Git branch `{branch_name}` from `main`.")
     try:
@@ -482,7 +490,7 @@ def commit_changes_node(state: DevPilotState) -> dict[str, Any]:
         latest_patches[p["file_path"]] = p
 
     for file_path, patch in latest_patches.items():
-        commit_msg = f"fix: resolve {patch.get('cwe', 'defect')} in {file_path} by @{github_user}"
+        commit_msg = f"fix: resolve {patch.get('cwe', 'defect')} in {file_path} (committed by @{github_user})"
         fixed_code = patch.get("fixed_code", "")
         file_sha = patch.get("sha")
         try:
@@ -540,9 +548,25 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
             for issue in actionable:
                 if issue["number"] == issue_num:
                     issue["pull_request_number"] = existing_num
+            # Clone PR representation for this patch so pull_requests covers every patch/issue
+            pr_clone = dict(existing_pr)
+            pr_clone["review_checklist"] = checklist_items
+            pr_clone["cwe"] = patch.get("cwe")
+            pr_clone["lineno"] = patch.get("lineno")
+            pr_clone["snippet"] = patch.get("snippet")
+            pr_clone["explanation"] = patch.get("explanation")
+            pr_clone["diff"] = patch.get("diff")
+            pr_clone["file_path"] = file_path
+            pr_clone["author"] = github_user
+            pr_clone["title"] = f"[Senior Review Requested] Resolve #{issue_num}: Fix {patch.get('cwe', 'Bug')} in {os.path.basename(file_path)} (@{github_user})"
+            pull_requests.append(pr_clone)
             continue
 
-        pr_title = f"[Senior Review Requested] Resolve #{issue_num}: Fix {patch.get('cwe', 'Bug')} in {os.path.basename(file_path)} (@{github_user})"
+        if client.is_mock() or len(patches) == 1:
+            pr_title = f"[Senior Review Requested] Resolve #{issue_num}: Fix {patch.get('cwe', 'Bug')} in {os.path.basename(file_path)} (@{github_user})"
+        else:
+            all_issue_nums = ", ".join(f"#{p['github_issue_number']}" for p in patches)
+            pr_title = f"[Senior Review Requested] Resolve {all_issue_nums}: Fix defects in {repo} (@{github_user})"
 
         checklist_items = patch.get("review_checklist", [
             "Functional correctness: automated patch resolves defect without functional regression.",
@@ -569,7 +593,7 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
 
         pr_body = (
             f"### 🚀 Senior Engineer Review Request\n\n"
-            f"> **Submitted by:** @{github_user} via DevPilot Autonomous AI Software Engineer\n"
+            f"> **Submitted and committed by:** @{github_user}\n"
             f"> **Target Repository:** `{owner}/{repo}` | **Branch:** `{branch_name}` → `main`\n"
             f"> **Target Defect / Issue:** #{issue_num} | **Commit SHA:** `{commit_sha[:8] if commit_sha else 'HEAD'}`\n"
             f"> **Total Actionable Issues Resolved:** {len(actionable)}\n"
@@ -581,7 +605,7 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
             f"#### 📋 Senior Engineer Sign-Off Checklist\n"
             f"{checklist_md}\n\n"
             f"---\n"
-            f"*Generated autonomously by DevPilot AI Software Engineer for Senior Reviewers. Contributed by @{github_user}.*"
+            f"*Committed by @{github_user} for repository {owner}/{repo}.*"
         )
 
         try:

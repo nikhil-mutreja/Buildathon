@@ -830,7 +830,7 @@ def should_create_jira(intent: dict[str, Any], actionable_issues: list[dict[str,
     """Decide whether Jira task creation should proceed."""
     if intent.get("no_jira", False) or intent.get("investigate_only", False):
         return False, "Jira skipped: explicitly disabled or investigate only."
-    is_requested = intent.get("needs_jira", False) or intent.get("needs_code_fix", False) or intent.get("needs_pr", False)
+    is_requested = intent.get("needs_jira", False)
     if not is_requested:
         return False, "Jira skipped: task tracking was not requested in user prompt."
     if not actionable_issues:
@@ -847,7 +847,7 @@ def should_send_slack(
     """Decide whether Slack notification should proceed."""
     if intent.get("no_slack", False) or intent.get("investigate_only", False):
         return False, "Slack skipped: explicitly disabled or investigate only."
-    is_requested = intent.get("needs_slack", False) or intent.get("needs_code_fix", False) or intent.get("needs_pr", False)
+    is_requested = intent.get("needs_slack", False)
     if not is_requested:
         return False, "Slack skipped: team notification was not requested in user prompt."
     if not jira_results and not actionable_issues and not pull_requests:

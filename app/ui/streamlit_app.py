@@ -299,17 +299,14 @@ with st.sidebar:
     repo_owner = st.text_input("Owner / Org", value=os.getenv("GITHUB_REPO_OWNER", "nikhil-mutreja"))
     repo_name_default = os.getenv("GITHUB_REPO_NAME", "Skill-Swap-Platform")
 
-    st.markdown("##### Integrations")
-    jira_project = st.text_input("Jira Project Key", value=os.getenv("JIRA_PROJECT_KEY", "DEV"))
-    slack_channel = st.text_input("Slack Channel", value=os.getenv("SLACK_CHANNEL", "#dev-alerts"))
-
     st.markdown("---")
-    st.markdown("##### Swytchcode Tools")
+    st.markdown("##### GitHub & Swytchcode Tools")
     st.caption("""
     `github.issue.get1` · `github.content.get`
     `github.content.update` · `github.pull.create`
-    `jira.api.issue.create` · `slack.chat.postmessage.create`
     """)
+    jira_project = os.getenv("JIRA_PROJECT_KEY", "DEV")
+    slack_channel = os.getenv("SLACK_CHANNEL", "#dev-alerts")
 
 # =============================================================================
 # Header
@@ -393,23 +390,21 @@ st.markdown('<div class="request-title">Development Request</div>', unsafe_allow
 prompt_col1, prompt_col2, prompt_col3, prompt_col4 = st.columns(4)
 
 with prompt_col1:
-    if st.button("🛡️ Scan, Fix, PR + Jira + Slack", use_container_width=True, key="q1"):
+    if st.button("🛡️ Scan, Fix All & Open PR", use_container_width=True, key="q1"):
         st.session_state["user_prompt"] = (
-            f"Scan {public_repo_input} for all bugs, fix them, open a pull request authored by @{github_username}, "
-            f"update Jira, and notify Slack."
+            f"Check repository {public_repo_input}, find all issues in the codebase, fix them, and open a pull request committed by @{github_username}."
         )
         st.session_state["auto_trigger"] = True
 
 with prompt_col2:
-    if st.button("🎯 Fix Issue #1 & Create PR", use_container_width=True, key="q2"):
+    if st.button("🎯 Fix Critical Bugs & Open PR", use_container_width=True, key="q2"):
         st.session_state["user_prompt"] = (
-            f"Fix issue #1 in {public_repo_input}, run the tests, "
-            f"and create a pull request authored by @{github_username}."
+            f"Scan {public_repo_input} for all critical bugs and vulnerabilities, resolve them, and open a pull request committed by @{github_username}."
         )
         st.session_state["auto_trigger"] = True
 
 with prompt_col3:
-    if st.button("🔍 Investigate & Code Audit Only", use_container_width=True, key="q3"):
+    if st.button("🔍 Code Audit & Inspect Only", use_container_width=True, key="q3"):
         st.session_state["user_prompt"] = (
             f"Audit and analyze {public_repo_input} for all bugs and defects. "
             f"Investigate only — do not modify code or open a PR."
@@ -417,16 +412,15 @@ with prompt_col3:
         st.session_state["auto_trigger"] = True
 
 with prompt_col4:
-    if st.button("🔗 Fix + Jira + Slack", use_container_width=True, key="q4"):
+    if st.button("🚀 Full Autonomous Sweep", use_container_width=True, key="q4"):
         st.session_state["user_prompt"] = (
-            f"Scan and fix all bugs in {public_repo_input}, open a pull request, "
-            f"create a Jira task, and notify Slack authored by @{github_username}."
+            f"Perform a complete sweep of {public_repo_input}, discover all bugs, apply patches with unified diffs, and open a pull request committed by @{github_username}."
         )
         st.session_state["auto_trigger"] = True
 
 default_prompt = st.session_state.get(
     "user_prompt",
-    f"Scan {public_repo_input} for all bugs, fix them, open a pull request authored by @{github_username}, update Jira, and notify Slack.",
+    f"Check repository {public_repo_input}, find all issues in the codebase, fix them, and open a pull request committed by @{github_username}.",
 )
 
 user_request = st.text_area(
@@ -603,25 +597,7 @@ with col_timeline:
     elif pr_error:
         timeline_steps.append(("failed", "PR creation failed", pr_error[:60]))
 
-    # Step 10: Jira
-    if jira_res:
-        for j in jira_res:
-            key = j.get("key", "N/A")
-            status = j.get("status", "Created")
-            if status == "NOT_CONFIGURED":
-                timeline_steps.append(("failed", f"Jira: not configured", j.get("error", "")[:50]))
-            else:
-                timeline_steps.append(("done", f"Jira: {key}", j.get("summary", "")[:50]))
 
-    # Step 11: Slack
-    if slack_res:
-        for s in slack_res:
-            if s.get("ok") or s.get("delivered", False):
-                timeline_steps.append(("done", f"Slack: {s.get('channel', '')}", "Notification sent"))
-            elif s.get("status") == "NOT_CONFIGURED":
-                timeline_steps.append(("failed", "Slack: not configured", s.get("error", "")[:50]))
-            else:
-                timeline_steps.append(("done", f"Slack: {s.get('channel', '')}", "Message dispatched"))
 
     # Render timeline
     for status_icon, title, desc in timeline_steps:
@@ -652,13 +628,7 @@ with col_timeline:
 
 # ── Details Panel ──
 with col_details:
-    tab_labels = ["Code Changes", "Test Results", "Pull Requests"]
-    if jira_res:
-        tab_labels.append("Jira")
-    if slack_res:
-        tab_labels.append("Slack")
-    tab_labels.append("Issues")
-    tab_labels.append("Audit Trail")
+    tab_labels = ["Code Changes", "Test Results", "Pull Requests", "Issues", "Audit Trail"]
 
     tabs = st.tabs(tab_labels)
     tab_idx = 0
@@ -833,67 +803,7 @@ with col_details:
             </div>
             """, unsafe_allow_html=True)
 
-    # ── TAB: Jira ──
-    if jira_res:
-        with tabs[tab_idx]:
-            tab_idx += 1
-            for j in jira_res:
-                key = j.get("key", "N/A")
-                status = j.get("status", "Created")
-                summary = j.get("summary", "")
-                url = j.get("url", "")
-                priority = j.get("priority", "High")
 
-                with st.container(border=True):
-                    j_col1, j_col2 = st.columns([3, 1])
-                    with j_col1:
-                        st.markdown(f"**📋 {key}**")
-                        st.caption(summary[:100])
-                    with j_col2:
-                        if status == "NOT_CONFIGURED":
-                            st.markdown('<span class="badge badge-demo">Not Configured</span>', unsafe_allow_html=True)
-                        else:
-                            st.markdown(f'<span class="badge badge-live">{status}</span>', unsafe_allow_html=True)
-
-                    if url and "mock" not in url.lower():
-                        st.markdown(f"🔗 [{url}]({url})")
-                    st.caption(f"Priority: {priority}")
-    else:
-        tab_idx += 0  # Jira tab not shown
-
-    # ── TAB: Slack ──
-    if slack_res:
-        with tabs[tab_idx]:
-            tab_idx += 1
-            for s in slack_res:
-                channel = s.get("channel", "")
-                ok = s.get("ok", False)
-                status_val = s.get("status", "")
-
-                with st.container(border=True):
-                    s_col1, s_col2 = st.columns([3, 1])
-                    with s_col1:
-                        st.markdown(f"**💬 {channel}**")
-                    with s_col2:
-                        if status_val == "NOT_CONFIGURED":
-                            st.markdown('<span class="badge badge-demo">Not Configured</span>', unsafe_allow_html=True)
-                        elif ok:
-                            st.markdown('<span class="badge badge-live">Delivered</span>', unsafe_allow_html=True)
-                        else:
-                            st.markdown('<span class="badge badge-live">Dispatched</span>', unsafe_allow_html=True)
-
-                    msg = s.get("message", {})
-                    if isinstance(msg, dict):
-                        txt = msg.get("text", "")
-                    else:
-                        txt = str(msg)
-                    intended = s.get("intended_message", "")
-                    display_msg = txt or intended
-                    if display_msg:
-                        with st.expander("Message content", expanded=False):
-                            st.text(display_msg[:1000])
-    else:
-        tab_idx += 0  # Slack tab not shown
 
     # ── TAB: Issues ──
     with tabs[tab_idx]:

@@ -424,12 +424,21 @@ class SwytchcodeClient:
                 "commit": {"message": message, "sha": "mock-commit-sha-4921"},
             }
 
-        logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_GITHUB_CONTENT_UPDATE} on {path}")
+        author_name = os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
+        author_email = os.getenv("GITHUB_USER_EMAIL", f"{author_name}@users.noreply.github.com")
         encoded_content = base64.b64encode(content.encode("utf-8")).decode("utf-8")
         body: dict[str, Any] = {
             "message": message,
             "content": encoded_content,
             "branch": branch,
+            "author": {
+                "name": author_name,
+                "email": author_email,
+            },
+            "committer": {
+                "name": author_name,
+                "email": author_email,
+            },
         }
         if not sha:
             try:
@@ -487,8 +496,10 @@ class SwytchcodeClient:
         repo_dir = self._find_repository_directory(owner, repo)
         if repo_dir and os.path.isdir(os.path.join(repo_dir, ".git")):
             try:
-                subprocess.run(["git", "config", "user.name", "DevPilot Agent"], cwd=repo_dir, check=False)
-                subprocess.run(["git", "config", "user.email", "devpilot@agentic.ai"], cwd=repo_dir, check=False)
+                author_name = os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
+                author_email = os.getenv("GITHUB_USER_EMAIL", f"{author_name}@users.noreply.github.com")
+                subprocess.run(["git", "config", "user.name", author_name], cwd=repo_dir, check=False)
+                subprocess.run(["git", "config", "user.email", author_email], cwd=repo_dir, check=False)
                 subprocess.run(["git", "checkout", "-B", branch_name], cwd=repo_dir, check=True, capture_output=True, text=True)
                 current = subprocess.run(["git", "branch", "--show-current"], cwd=repo_dir, capture_output=True, text=True).stdout.strip()
                 logger.info(f"[TOOL] Real Git branch '{current}' checked out in {repo_dir}")
@@ -614,8 +625,10 @@ class SwytchcodeClient:
         repo_dir = self._find_repository_directory(owner, repo)
         if repo_dir and os.path.isdir(os.path.join(repo_dir, ".git")):
             try:
-                subprocess.run(["git", "config", "user.name", "DevPilot Agent"], cwd=repo_dir, check=False)
-                subprocess.run(["git", "config", "user.email", "devpilot@agentic.ai"], cwd=repo_dir, check=False)
+                author_name = os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
+                author_email = os.getenv("GITHUB_USER_EMAIL", f"{author_name}@users.noreply.github.com")
+                subprocess.run(["git", "config", "user.name", author_name], cwd=repo_dir, check=False)
+                subprocess.run(["git", "config", "user.email", author_email], cwd=repo_dir, check=False)
                 subprocess.run(["git", "add", file_path], cwd=repo_dir, check=True, capture_output=True, text=True)
                 subprocess.run(["git", "commit", "-m", message], cwd=repo_dir, capture_output=True, text=True)
                 sha_res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, check=True, capture_output=True, text=True)
