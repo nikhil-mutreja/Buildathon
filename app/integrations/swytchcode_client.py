@@ -450,8 +450,8 @@ class SwytchcodeClient:
                     existing_file = self.get_repository_file(owner=owner, repo=repo, path=path, ref="main")
                     if isinstance(existing_file, dict) and existing_file.get("sha"):
                         sha = existing_file["sha"]
-                except Exception:
-                    pass
+                except Exception as e:
+        logger.warning(f"Handled error: {e}")
 
         if sha:
             body["sha"] = sha

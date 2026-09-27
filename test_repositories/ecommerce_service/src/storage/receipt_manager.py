@@ -9,6 +9,7 @@ def archive_transaction_receipt(receipt_path: str):
     logger.info(f"Archiving transaction receipt from {receipt_path}")
     
     # VULNERABILITY (CWE-775): Unclosed file descriptor resource leak
-    f = open(receipt_path, 'r')
-    receipt_data = f.read()
+    # FIXED (CWE-775): Context manager ensures automatic file descriptor closure
+    with open(receipt_path, 'r') as f:
+        receipt_data = f.read()
     return receipt_data

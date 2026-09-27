@@ -9,7 +9,8 @@ def fetch_customer_orders(customer_id: str, connection):
     cursor = connection.cursor()
     
     # VULNERABILITY (CWE-89): SQL Injection via dynamic f-string formatting
-    query = f"SELECT * FROM customer_orders WHERE customer_id = '{customer_id}'"
-    logger.info(f"Executing query: {query}")
-    cursor.execute(query)
+    # FIXED (CWE-89): Parameterized query prevents SQL Injection vulnerabilities
+    query = 'SELECT * FROM customer_orders WHERE customer_id = ?'
+    logger.info('Executing parameterized query for customer')
+    cursor.execute(query, (customer_id,))
     return cursor.fetchall()
