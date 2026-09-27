@@ -447,9 +447,10 @@ def create_git_branch_node(state: DevPilotState) -> dict[str, Any]:
         # Remote-only repos use timestamped unique branch to ensure fresh PR creation every time
         branch_name = f"fix/{github_user}-patch-{int(time.time())}"
 
-    decisions.append(f"Creating Git branch `{branch_name}` from `main`.")
+    base_branch = client.get_default_branch(owner, repo) or "main"
+    decisions.append(f"Creating Git branch `{branch_name}` from `{base_branch}`.")
     try:
-        res = client.create_git_branch(owner=owner, repo=repo, branch_name=branch_name, base_branch="main")
+        res = client.create_git_branch(owner=owner, repo=repo, branch_name=branch_name, base_branch=base_branch)
         actions.append(f"Created real Git branch `{branch_name}`.")
         return {
             "git_branch": branch_name,
@@ -575,10 +576,12 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
         all_issue_nums = ", ".join(f"#{p['github_issue_number']}" for p in patches)
         pr_title = f"[Senior Review Requested] Resolve {all_issue_nums}: Fix defects in {repo} (@{github_user})"
 
+    default_branch = client.get_default_branch(owner, repo) or "main"
+
     pr_body = (
         f"### 🚀 Senior Engineer Review Request\n\n"
         f"> **Submitted and committed by:** @{github_user}\n"
-        f"> **Target Repository:** `{owner}/{repo}` | **Branch:** `{branch_name}` → `main`\n"
+        f"> **Target Repository:** `{owner}/{repo}` | **Branch:** `{branch_name}` → `{default_branch}`\n"
         f"> **Commit SHA:** `{commit_sha[:8] if commit_sha else 'HEAD'}`\n"
         f"> **Total Actionable Issues Resolved:** {len(actionable)}\n"
         f"> **Review Status:** 🟡 Pending Senior Engineer Approval\n\n"
@@ -600,7 +603,7 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
                 repo=repo,
                 title=pr_title,
                 head=branch_name,
-                base="main",
+                base=default_branch,
                 body=pr_body,
                 author=github_user,
             )

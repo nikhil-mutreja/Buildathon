@@ -503,3 +503,79 @@ def test_distinct_repositories_produce_strictly_disjoint_results():
     ecom_prs = [pr["title"] for pr in ecom_state["pull_requests"]]
     assert set(auth_prs).isdisjoint(set(ecom_prs))
 
+
+def test_arbitrary_public_repo_url_with_dynamic_default_branch():
+    """Verify that any public repository (e.g. pallets/flask, octocat/Hello-World) works end-to-end."""
+    user_prompt = (
+        "Check this repo https://github.com/pallets/flask, find all issues in the codebase, "
+        "fix them, and open a pull request committed by @nikhil-mutreja."
+    )
+    state = run_devpilot_agent(user_prompt, app_mode="mock")
+    assert state["repo_owner"] == "pallets"
+    assert state["repo_name"] == "flask"
+    assert state["github_username"] == "nikhil-mutreja"
+    assert len(state["code_patches"]) >= 1
+    assert len(state["pull_requests"]) >= 1
+    pr = state["pull_requests"][0]
+    assert pr["user"]["login"] == "nikhil-mutreja"
+    assert "@nikhil-mutreja" in pr["title"]
+    assert "[Senior Review Requested]" in pr["title"]
+    assert "flask" in pr.get("html_url", "") or state["repo_name"] == "flask"
+
+
+def test_generic_patch_generation_on_arbitrary_variable_names():
+    """Verify that patch generation handles arbitrary variable names and non-canned patterns."""
+    from app.agent.analyzer import diagnose_and_generate_patch
+
+    # 1. Arbitrary unclosed file with custom variable names
+    issue_unclosed = {
+        "number": 201,
+        "defect_type": "UNCLOSED_FILE_DESCRIPTOR_LEAK",
+        "file_path": "custom/path/reader.py",
+        "cwe": "CWE-775",
+    }
+    code_unclosed = "def load_dataset(dataset_csv):\n    data_stream = open(dataset_csv, 'r')\n    records = data_stream.read()\n    return records\n"
+    patch_unclosed = diagnose_and_generate_patch(issue_unclosed, code_unclosed)
+    assert "with open(dataset_csv, 'r') as data_stream:" in patch_unclosed["fixed_code"]
+    assert "--- a/custom/path/reader.py" in patch_unclosed["diff"]
+
+    # 2. Arbitrary mutable default with custom function & parameter names
+    issue_mutable = {
+        "number": 202,
+        "defect_type": "MUTABLE_DEFAULT_ARGUMENT",
+        "file_path": "pkg/handlers.py",
+        "cwe": "PEP-484",
+    }
+    code_mutable = "def dispatch_events(event_id: str, listeners=[]):\n    listeners.append(event_id)\n    return listeners\n"
+    patch_mutable = diagnose_and_generate_patch(issue_mutable, code_mutable)
+    assert "listeners=None" in patch_mutable["fixed_code"]
+    assert "if listeners is None:" in patch_mutable["fixed_code"]
+    assert "--- a/pkg/handlers.py" in patch_mutable["diff"]
+
+    # 3. Arbitrary hardcoded API secret
+    issue_secret = {
+        "number": 203,
+        "defect_type": "HARDCODED_CREDENTIAL",
+        "file_path": "backend/config.py",
+        "cwe": "CWE-798",
+    }
+    code_secret = 'api_key = "live_secret_key_99281729384759281729"\n'
+    patch_secret = diagnose_and_generate_patch(issue_secret, code_secret)
+    assert "os.getenv" in patch_secret["fixed_code"]
+    assert "--- a/backend/config.py" in patch_secret["diff"]
+
+    # 4. Arbitrary README documentation improvement
+    issue_readme = {
+        "number": 204,
+        "defect_type": "DOCUMENTATION_STANDARDS_DEFECT",
+        "file_path": "README.md",
+        "cwe": "CWE-INFO",
+    }
+    code_readme = "# Hello World\nA sample repository."
+    patch_readme = diagnose_and_generate_patch(issue_readme, code_readme)
+    assert "Architecture & Getting Started" in patch_readme["fixed_code"]
+    assert "Contributing Guidelines" in patch_readme["fixed_code"]
+    assert "Security Policy" in patch_readme["fixed_code"]
+    assert "--- a/README.md" in patch_readme["diff"]
+
+

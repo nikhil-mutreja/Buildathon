@@ -418,6 +418,13 @@ with prompt_col4:
         )
         st.session_state["auto_trigger"] = True
 
+# Dynamically sync prompt when user modifies the repo input field
+if st.session_state.get("last_synced_repo") != public_repo_input:
+    st.session_state["last_synced_repo"] = public_repo_input
+    st.session_state["user_prompt"] = (
+        f"Check repository {public_repo_input}, find all issues in the codebase, fix them, and open a pull request committed by @{github_username}."
+    )
+
 default_prompt = st.session_state.get(
     "user_prompt",
     f"Check repository {public_repo_input}, find all issues in the codebase, fix them, and open a pull request committed by @{github_username}.",
@@ -429,6 +436,7 @@ user_request = st.text_area(
     height=80,
     label_visibility="collapsed",
     placeholder="e.g. Fix the authentication bug in issue #42, run tests, and open a PR...",
+    key=f"user_request_{public_repo_input}",
 )
 
 run_btn = st.button("⚡ Execute", type="primary", use_container_width=True)

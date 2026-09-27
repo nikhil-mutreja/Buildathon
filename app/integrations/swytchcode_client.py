@@ -119,14 +119,25 @@ class SwytchcodeClient:
 
         try:
             result = self._swx.tools.execute(TOOL_GITHUB_ISSUES, args)
+            raw_items = []
             if isinstance(result, list):
-                logger.info(f"[TOOL] GitHub returned {len(result)} issues via Swytchcode")
-                return result
-            elif isinstance(result, dict) and "items" in result:
-                return result["items"]
-            elif isinstance(result, dict) and "error" in result:
-                raise RuntimeError(result.get("error", "Unknown Swytchcode error"))
-            return [result] if result else []
+                if result and isinstance(result[0], dict) and "data" in result[0] and isinstance(result[0]["data"], list):
+                    raw_items = result[0]["data"]
+                else:
+                    raw_items = result
+            elif isinstance(result, dict):
+                if "data" in result and isinstance(result["data"], list):
+                    raw_items = result["data"]
+                elif "items" in result:
+                    raw_items = result["items"]
+                elif "error" in result:
+                    raise RuntimeError(result.get("error", "Unknown Swytchcode error"))
+                else:
+                    raw_items = [result]
+
+            final_issues = [item for item in raw_items if isinstance(item, dict)]
+            logger.info(f"[TOOL] GitHub returned {len(final_issues)} issue(s) via Swytchcode")
+            return final_issues
         except Exception as e:
             err_msg = str(e)
             logger.error(f"[TOOL] Swytchcode GitHub execution failed: {err_msg}")
@@ -254,9 +265,14 @@ class SwytchcodeClient:
         if repo_dir and os.path.isdir(repo_dir):
             discovered = []
             for root, dirs, filenames in os.walk(repo_dir):
-                dirs[:] = [d for d in dirs if d not in [".venv", ".git", "node_modules", "__pycache__", ".pytest_cache", ".swytchcode"]]
+                dirs[:] = [d for d in dirs if d not in [".venv", ".git", "node_modules", "__pycache__", ".pytest_cache", ".swytchcode", "dist", "build"]]
                 for f in filenames:
-                    if any(f.endswith(ext) for ext in [".py", ".ts", ".tsx", ".js", ".jsx"]):
+                    if any(f.endswith(ext) for ext in [
+                        ".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+                        ".go", ".rs", ".java", ".kt", ".c", ".cpp", ".cc", ".h", ".hpp",
+                        ".cs", ".rb", ".php", ".sh", ".bash", ".sql", ".html", ".css",
+                        ".json", ".yaml", ".yml", ".toml", ".md", ".txt"
+                    ]) or f in ("Dockerfile", "Makefile", "README", "README.md", "readme.md"):
                         rel = os.path.relpath(os.path.join(root, f), repo_dir)
                         discovered.append(rel)
             if discovered:
@@ -275,16 +291,17 @@ class SwytchcodeClient:
             ]
 
         # 3. Real mode: authenticated GitHub API tree listing with rate-limit handling.
-        # There is no Swytchcode tool for recursive tree listing (github.content.get
-        # requires a known path and cannot list the root). We use the GitHub REST API
-        # directly here, authenticated via GITHUB_TOKEN if available.
-        # Swytchcode's stored OAuth credentials are not accessible from the Python
-        # subprocess in all environments — the token env var is the authenticated path.
         import urllib.request as _urllib_req
         import urllib.error as _urllib_err
         import time as _time
 
-        CODE_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx"}
+        CODE_EXTENSIONS = {
+            ".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+            ".go", ".rs", ".java", ".kt", ".c", ".cpp", ".cc", ".h", ".hpp",
+            ".cs", ".rb", ".php", ".sh", ".bash", ".sql", ".html", ".css",
+            ".json", ".yaml", ".yml", ".toml", ".md", ".txt"
+        }
+        SPECIAL_FILENAMES = {"Dockerfile", "Makefile", "README", "README.md", "readme.md", "LICENSE"}
         MAX_RETRIES = 3
         token = os.getenv("GITHUB_TOKEN")
         target_ref = ref if ref and ref not in ("main", "master") else "HEAD"
@@ -305,10 +322,22 @@ class SwytchcodeClient:
                     code_files = [
                         item["path"] for item in tree
                         if item.get("type") == "blob"
-                        and any(item["path"].endswith(ext) for ext in CODE_EXTENSIONS)
+                        and (
+                            any(item["path"].endswith(ext) for ext in CODE_EXTENSIONS)
+                            or os.path.basename(item["path"]) in SPECIAL_FILENAMES
+                        )
+                        and not any(ignored in item["path"] for ignored in [".git/", "node_modules/", ".venv/", "dist/", "build/"])
                     ]
+                    # Fallback to all blobs if filter was too strict
+                    if not code_files and tree:
+                        code_files = [
+                            item["path"] for item in tree
+                            if item.get("type") == "blob"
+                            and not any(ignored in item["path"] for ignored in [".git/", "node_modules/", ".venv/"])
+                        ]
                     logger.info(f"[TOOL] GitHub tree listed {len(code_files)} code file(s) for {owner}/{repo}@{ref}")
-                    return sorted(code_files)
+                    # Return capped to top 50 to avoid timeout on massive repos
+                    return sorted(code_files)[:50]
 
             except _urllib_err.HTTPError as http_err:
                 status = http_err.code
@@ -473,12 +502,95 @@ class SwytchcodeClient:
             logger.error(f"[TOOL] Swytchcode GitHub file update failed: {err_msg}")
             raise RuntimeError(f"Swytchcode GitHub file update error: {err_msg}")
 
+    def get_default_branch(self, owner: str, repo: str) -> str:
+        """Detect default branch ('main', 'master', etc.) dynamically for any repository."""
+        repo_dir = self._find_repository_directory(owner, repo)
+        if repo_dir and os.path.isdir(os.path.join(repo_dir, ".git")):
+            try:
+                res = subprocess.run(
+                    ["git", "symbolic-ref", "--short", "HEAD"],
+                    cwd=repo_dir,
+                    capture_output=True,
+                    text=True,
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    return res.stdout.strip()
+            except Exception:
+                pass
+
+        if self.is_mock():
+            return "main"
+
+        import urllib.request as _req
+        token = os.getenv("GITHUB_TOKEN")
+        url = f"https://api.github.com/repos/{owner}/{repo}"
+        req = _req.Request(url)
+        req.add_header("User-Agent", "DevPilot-Agent/1.0")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with _req.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if isinstance(data, dict) and data.get("default_branch"):
+                    branch = data["default_branch"]
+                    logger.info(f"[TOOL] Detected default branch '{branch}' for {owner}/{repo}")
+                    return branch
+        except Exception as e:
+            logger.warning(f"[TOOL] Could not query default branch for {owner}/{repo}: {e}")
+
+        for cand in ("main", "master", "trunk", "development", "dev"):
+            sha = self._get_branch_head_sha(owner, repo, cand)
+            if sha:
+                return cand
+
+        return "main"
+
+    def _ensure_fork(self, owner: str, repo: str, github_user: str) -> dict[str, Any]:
+        """Ensure a fork exists on github_user's account for third-party public repositories."""
+        import urllib.request as _req
+        token = os.getenv("GITHUB_TOKEN")
+
+        check_url = f"https://api.github.com/repos/{github_user}/{repo}"
+        req = _req.Request(check_url)
+        req.add_header("User-Agent", "DevPilot-Agent/1.0")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with _req.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                logger.info(f"[TOOL] Fork {github_user}/{repo} already exists.")
+                return {"fork_owner": github_user, "fork_repo": repo, "data": data}
+        except Exception:
+            pass
+
+        fork_url = f"https://api.github.com/repos/{owner}/{repo}/forks"
+        req = _req.Request(fork_url, data=b"{}", headers={
+            "User-Agent": "DevPilot-Agent/1.0",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        })
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with _req.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                logger.info(f"[TOOL] Fork {github_user}/{repo} requested successfully.")
+                time.sleep(2)
+                return {"fork_owner": github_user, "fork_repo": repo, "data": data}
+        except Exception as e:
+            logger.warning(f"[TOOL] Could not create fork {github_user}/{repo}: {e}")
+            return {"fork_owner": github_user, "fork_repo": repo}
+
     def create_git_branch(
         self,
         owner: str,
         repo: str,
         branch_name: str,
-        base_branch: str = "main",
+        base_branch: Optional[str] = None,
     ) -> dict[str, Any]:
         """Create a git branch via local git or Swytchcode github.git.refs.create.
 
@@ -486,9 +598,11 @@ class SwytchcodeClient:
         For remote-only GitHub repos: resolves base branch HEAD SHA via
         github.content.get, then calls github.git.refs.create with the real SHA.
         """
+        effective_base = base_branch or self.get_default_branch(owner, repo) or "main"
+
         if self.is_mock():
-            logger.info(f"[TOOL] [MOCK] Simulating branch creation '{branch_name}' from '{base_branch}'")
-            return {"branch": branch_name, "base": base_branch, "created": True, "mode": "mock"}
+            logger.info(f"[TOOL] [MOCK] Simulating branch creation '{branch_name}' from '{effective_base}'")
+            return {"branch": branch_name, "base": effective_base, "created": True, "mode": "mock"}
 
         # Local git repository: create branch on disk
         repo_dir = self._find_repository_directory(owner, repo)
@@ -501,78 +615,111 @@ class SwytchcodeClient:
                 subprocess.run(["git", "checkout", "-B", branch_name], cwd=repo_dir, check=True, capture_output=True, text=True)
                 current = subprocess.run(["git", "branch", "--show-current"], cwd=repo_dir, capture_output=True, text=True).stdout.strip()
                 logger.info(f"[TOOL] Real Git branch '{current}' checked out in {repo_dir}")
-                return {"branch": current, "base": base_branch, "created": True, "directory": repo_dir}
+                return {"branch": current, "base": effective_base, "created": True, "directory": repo_dir}
             except Exception as e:
                 err_msg = f"Failed to create git branch '{branch_name}': {e}"
                 logger.error(err_msg)
                 raise RuntimeError(err_msg)
 
         # Remote-only GitHub repo: resolve base branch HEAD SHA, then create ref via Swytchcode
-        logger.info(f"[TOOL] Resolving HEAD SHA for {owner}/{repo}@{base_branch} via github.content.get")
-        try:
-            # Get any file to obtain the commit SHA. README.md is a common entry point.
-            # We try several common filenames.
-            sha = None
+        logger.info(f"[TOOL] Resolving HEAD SHA for {owner}/{repo}@{effective_base}")
+        sha = self._get_branch_head_sha(owner, repo, effective_base)
+        if not sha:
             for probe_path in ["README.md", "README", "readme.md", "src", "package.json", "setup.py"]:
                 try:
                     content_result = self._swx.tools.execute(
                         TOOL_GITHUB_CONTENT_GET,
-                        {"params": {"owner": owner, "repo": repo, "path": probe_path, "ref": base_branch}},
+                        {"params": {"owner": owner, "repo": repo, "path": probe_path, "ref": effective_base}},
                     )
-                    data = content_result.get("data", content_result)
-                    if isinstance(data, dict):
-                        sha = data.get("sha")
-                    elif isinstance(data, list) and data:
-                        sha = data[0].get("sha")
+                    sha = self._get_branch_head_sha(owner, repo, effective_base)
                     if sha:
-                        # github.content.get returns blob/tree SHA, not commit SHA.
-                        # We need the commit SHA from the response links or commit field.
-                        # The data from Swytchcode wraps GitHub's content response which
-                        # contains the blob SHA, not the commit SHA.
-                        # For refs.create we need the latest commit SHA on the base branch.
-                        # Use the git tree API via authenticated urllib to get commit SHA.
-                        sha = self._get_branch_head_sha(owner, repo, base_branch)
-                        if sha:
-                            break
+                        break
                 except Exception:
                     continue
 
-            if not sha:
-                raise RuntimeError(
-                    f"Could not resolve HEAD commit SHA for '{owner}/{repo}@{base_branch}'. "
-                    f"Cannot create remote branch '{branch_name}'."
-                )
+        if not sha:
+            detected = self.get_default_branch(owner, repo)
+            if detected != effective_base:
+                effective_base = detected
+                sha = self._get_branch_head_sha(owner, repo, effective_base)
 
-            logger.info(f"[TOOL] Executing Swytchcode github.git.refs.create for branch '{branch_name}' at SHA {sha[:8]}...")
+        if not sha:
+            raise RuntimeError(
+                f"Could not resolve HEAD commit SHA for '{owner}/{repo}@{effective_base}'. "
+                f"Cannot create remote branch '{branch_name}'."
+            )
+
+        logger.info(f"[TOOL] Executing Swytchcode github.git.refs.create for branch '{branch_name}' at SHA {sha[:8]}...")
+        github_user = os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
+        target_owner = owner
+
+        try:
             result = self._swx.tools.execute(
                 "github.git.refs.create",
                 {
-                    "params": {"owner": owner, "repo": repo},
+                    "params": {"owner": target_owner, "repo": repo},
                     "body": {
                         "ref": f"refs/heads/{branch_name}",
                         "sha": sha,
                     },
                 },
             )
+            is_err = False
+            inner = {}
             if isinstance(result, dict):
                 inner = result.get("data", {})
                 status_code = result.get("status_code")
                 data_status = inner.get("status") if isinstance(inner, dict) else None
-                if status_code in (422, 400) or data_status in (422, 400, "422", "400") or "already exists" in str(result).lower():
+                if status_code in (403, 404, 422, 400) or data_status in (403, 404, 422, 400, "403", "404", "422", "400") or "already exists" in str(result).lower():
                     if "already exists" in str(result).lower():
-                        logger.info(f"[TOOL] Remote branch '{branch_name}' already exists on {owner}/{repo}. Reusing branch.")
-                        return {"branch": branch_name, "base": base_branch, "created": True, "sha": sha or "HEAD"}
-                    raise RuntimeError(f"Swytchcode branch creation error for '{owner}/{repo}@{branch_name}': {inner.get('message', str(result))}")
+                        logger.info(f"[TOOL] Remote branch '{branch_name}' already exists on {target_owner}/{repo}. Reusing branch.")
+                        return {"branch": branch_name, "base": effective_base, "created": True, "sha": sha or "HEAD"}
+                    is_err = True
 
-            logger.info(f"[TOOL] Remote branch '{branch_name}' created on {owner}/{repo}")
-            return {"branch": branch_name, "base": base_branch, "created": True, "sha": sha, "result": result}
+            if is_err:
+                if owner.lower() != github_user.lower():
+                    logger.info(f"[TOOL] Direct branch creation on `{owner}/{repo}` failed ({inner.get('message', str(result))}). Switching to fork `{github_user}/{repo}`...")
+                    self._ensure_fork(owner, repo, github_user)
+                    fork_res = self._swx.tools.execute(
+                        "github.git.refs.create",
+                        {
+                            "params": {"owner": github_user, "repo": repo},
+                            "body": {
+                                "ref": f"refs/heads/{branch_name}",
+                                "sha": sha,
+                            },
+                        },
+                    )
+                    return {"branch": branch_name, "base": effective_base, "created": True, "sha": sha, "is_fork": True, "fork_owner": github_user, "result": fork_res}
+                raise RuntimeError(f"Swytchcode branch creation error for '{owner}/{repo}@{branch_name}': {inner.get('message', str(result))}")
+
+            logger.info(f"[TOOL] Remote branch '{branch_name}' created on {target_owner}/{repo}")
+            return {"branch": branch_name, "base": effective_base, "created": True, "sha": sha, "result": result}
 
         except RuntimeError:
             raise
         except Exception as e:
             if "already exists" in str(e).lower() or "reference already exists" in str(e).lower():
-                logger.info(f"[TOOL] Remote branch '{branch_name}' already exists on {owner}/{repo}. Reusing branch.")
-                return {"branch": branch_name, "base": base_branch, "created": True, "sha": sha or "HEAD"}
+                logger.info(f"[TOOL] Remote branch '{branch_name}' already exists on {target_owner}/{repo}. Reusing branch.")
+                return {"branch": branch_name, "base": effective_base, "created": True, "sha": sha or "HEAD"}
+            if owner.lower() != github_user.lower():
+                logger.info(f"[TOOL] Branch creation on `{owner}/{repo}` raised error ({e}). Trying fork `{github_user}/{repo}`...")
+                try:
+                    self._ensure_fork(owner, repo, github_user)
+                    fork_res = self._swx.tools.execute(
+                        "github.git.refs.create",
+                        {
+                            "params": {"owner": github_user, "repo": repo},
+                            "body": {
+                                "ref": f"refs/heads/{branch_name}",
+                                "sha": sha,
+                            },
+                        },
+                    )
+                    return {"branch": branch_name, "base": effective_base, "created": True, "sha": sha, "is_fork": True, "fork_owner": github_user, "result": fork_res}
+                except Exception as fe:
+                    if "already exists" in str(fe).lower():
+                        return {"branch": branch_name, "base": effective_base, "created": True, "sha": sha, "is_fork": True, "fork_owner": github_user}
             raise RuntimeError(f"Swytchcode branch creation error for '{owner}/{repo}@{branch_name}': {e}")
 
     def _get_branch_head_sha(self, owner: str, repo: str, branch: str) -> Optional[str]:
@@ -646,15 +793,30 @@ class SwytchcodeClient:
 
         # For remote repositories without local git checkout: commit to branch via Swytchcode
         logger.info(f"[TOOL] Committing `{file_path}` to remote branch `{branch_name}` on {owner}/{repo}")
-        return self.update_repository_file(
-            owner=owner,
-            repo=repo,
-            path=file_path,
-            content=content,
-            message=message,
-            branch=branch_name,
-            sha=sha,
-        )
+        try:
+            return self.update_repository_file(
+                owner=owner,
+                repo=repo,
+                path=file_path,
+                content=content,
+                message=message,
+                branch=branch_name,
+                sha=sha,
+            )
+        except Exception as direct_err:
+            github_user = os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
+            if owner.lower() != github_user.lower():
+                logger.info(f"[TOOL] Direct commit to `{owner}/{repo}` failed ({direct_err}). Committing to fork `{github_user}/{repo}`...")
+                return self.update_repository_file(
+                    owner=github_user,
+                    repo=repo,
+                    path=file_path,
+                    content=content,
+                    message=message,
+                    branch=branch_name,
+                    sha=sha,
+                )
+            raise
 
 
     def run_tests(
@@ -763,22 +925,27 @@ class SwytchcodeClient:
         repo: str,
         title: str,
         head: str,
-        base: str = "main",
+        base: Optional[str] = None,
         body: str = "",
         author: str = "nikhil-mutreja",
     ) -> dict[str, Any]:
         """Create a pull request in repository using Swytchcode github.pull.create."""
-        if self.is_mock():
-            logger.info(f"[TOOL] [MOCK] Simulating Pull Request creation by @{author}: {title} ({head} -> {base})")
-            return self._mock_pull_request(owner, repo, title, head, base, body, author)
+        github_user = author or os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
+        clean_head = head.split(":")[-1]
+        effective_head = f"{github_user}:{clean_head}" if owner.lower() != github_user.lower() else clean_head
+        effective_base = base or self.get_default_branch(owner, repo) or "main"
 
-        logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_GITHUB_PULL_CREATE}: {title}")
+        if self.is_mock():
+            logger.info(f"[TOOL] [MOCK] Simulating Pull Request creation by @{author}: {title} ({effective_head} -> {effective_base})")
+            return self._mock_pull_request(owner, repo, title, clean_head, effective_base, body, author)
+
+        logger.info(f"[TOOL] Executing Swytchcode tool {TOOL_GITHUB_PULL_CREATE}: {title} ({effective_head} -> {effective_base})")
         args: dict[str, Any] = {
             "params": {"owner": owner, "repo": repo},
             "body": {
                 "title": title,
-                "head": head,
-                "base": base,
+                "head": effective_head,
+                "base": effective_base,
                 "body": body,
             },
         }
@@ -802,9 +969,9 @@ class SwytchcodeClient:
 
             if is_api_err:
                 if "already exists" in err_text.lower() or "validation failed" in err_text.lower():
-                    existing = self._find_existing_pull_request(owner, repo, head)
+                    existing = self._find_existing_pull_request(owner, repo, effective_head, author=author)
                     if existing:
-                        logger.info(f"[TOOL] Reusing existing Pull Request #{existing.get('number')} for branch {head}")
+                        logger.info(f"[TOOL] Reusing existing Pull Request #{existing.get('number')} for branch {effective_head}")
                         return existing
                 err_msg = inner_data.get("message", err_text) if isinstance(inner_data, dict) else err_text
                 raise RuntimeError(f"Swytchcode GitHub PR creation error: {err_msg}")
@@ -829,42 +996,45 @@ class SwytchcodeClient:
             err_msg = str(e)
             logger.error(f"[TOOL] Swytchcode GitHub PR creation failed: {err_msg}")
             if "already exists" in err_msg.lower() or "validation failed" in err_msg.lower():
-                existing = self._find_existing_pull_request(owner, repo, head)
+                existing = self._find_existing_pull_request(owner, repo, effective_head, author=author)
                 if existing:
-                    logger.info(f"[TOOL] Reusing existing Pull Request #{existing.get('number')} for branch {head}")
+                    logger.info(f"[TOOL] Reusing existing Pull Request #{existing.get('number')} for branch {effective_head}")
                     return existing
             raise RuntimeError(f"Swytchcode GitHub PR creation error: {err_msg}")
 
-    def _find_existing_pull_request(self, owner: str, repo: str, head: str) -> Optional[dict[str, Any]]:
+    def _find_existing_pull_request(self, owner: str, repo: str, head: str, author: Optional[str] = None) -> Optional[dict[str, Any]]:
         """Look up existing open pull request for head branch."""
         import urllib.request as _req
         import urllib.error as _uerr
 
         token = os.getenv("GITHUB_TOKEN")
         clean_head = head.split(":")[-1]
-        head_filter = f"{owner}:{clean_head}"
-        url = f"https://api.github.com/repos/{owner}/{repo}/pulls?head={head_filter}&state=open"
-        req = _req.Request(url)
-        req.add_header("User-Agent", "DevPilot-Agent/1.0")
-        req.add_header("Accept", "application/vnd.github+json")
-        if token:
-            req.add_header("Authorization", f"Bearer {token}")
-        try:
-            with _req.urlopen(req, timeout=15) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                if isinstance(data, list) and data:
-                    pr = data[0]
-                    return {
-                        "number": pr.get("number"),
-                        "html_url": pr.get("html_url"),
-                        "title": pr.get("title"),
-                        "state": pr.get("state", "open"),
-                        "head": {"ref": clean_head},
-                        "base": {"ref": pr.get("base", {}).get("ref", "main")},
-                        "data": pr,
-                    }
-        except Exception as e:
-            logger.warning(f"Could not find existing PR via head filter for {head}: {e}")
+        github_user = author or os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
+        filters = [f"{owner}:{clean_head}", f"{github_user}:{clean_head}", clean_head]
+
+        for head_filter in filters:
+            url = f"https://api.github.com/repos/{owner}/{repo}/pulls?head={head_filter}&state=open"
+            req = _req.Request(url)
+            req.add_header("User-Agent", "DevPilot-Agent/1.0")
+            req.add_header("Accept", "application/vnd.github+json")
+            if token:
+                req.add_header("Authorization", f"Bearer {token}")
+            try:
+                with _req.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    if isinstance(data, list) and data:
+                        pr = data[0]
+                        return {
+                            "number": pr.get("number"),
+                            "html_url": pr.get("html_url"),
+                            "title": pr.get("title"),
+                            "state": pr.get("state", "open"),
+                            "head": {"ref": clean_head},
+                            "base": {"ref": pr.get("base", {}).get("ref", "main")},
+                            "data": pr,
+                        }
+            except Exception as e:
+                logger.warning(f"Could not find existing PR via head filter for {head_filter}: {e}")
 
         # Fallback: scan recent open PRs directly
         try:
