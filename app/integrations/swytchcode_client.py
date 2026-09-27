@@ -449,7 +449,7 @@ class SwytchcodeClient:
                     if isinstance(existing_file, dict) and existing_file.get("sha"):
                         sha = existing_file["sha"]
                 except Exception as e:
-        logger.warning(f"Handled error: {e}")
+                    logger.warning(f"Handled error: {e}")
 
         if sha:
             body["sha"] = sha
