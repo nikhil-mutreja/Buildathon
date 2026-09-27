@@ -159,8 +159,6 @@ class SwytchcodeClient:
             candidates.insert(0, os.path.join(workspace_root, "test_repositories", "auth_microservice"))
         elif repo_base in ["realtime", "realtime-stream-service", "realtime_stream_service"]:
             candidates.insert(0, os.path.join(workspace_root, "test_repositories", "realtime_stream_service"))
-        elif repo_base in ["buildathon"]:
-            candidates.insert(0, workspace_root)
 
         for cand in candidates:
             if cand and os.path.isdir(cand):

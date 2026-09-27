@@ -305,8 +305,8 @@ with st.sidebar:
     `github.issue.get1` · `github.content.get`
     `github.content.update` · `github.pull.create`
     """)
-    jira_project = os.getenv("JIRA_PROJECT_KEY", "DEV")
-    slack_channel = os.getenv("SLACK_CHANNEL", "#dev-alerts")
+    jira_project = ""
+    slack_channel = ""
 
 # =============================================================================
 # Header
@@ -628,7 +628,7 @@ with col_timeline:
 
 # ── Details Panel ──
 with col_details:
-    tab_labels = ["Code Changes", "Test Results", "Pull Requests", "Issues", "Audit Trail"]
+    tab_labels = ["Code Changes", "Test Results", "Pull Request", "Issues", "Audit Trail"]
 
     tabs = st.tabs(tab_labels)
     tab_idx = 0
@@ -725,58 +725,67 @@ with col_details:
             </div>
             """, unsafe_allow_html=True)
 
-    # ── TAB: Pull Requests ──
+    # ── TAB: Pull Request ──
     with tabs[tab_idx]:
         tab_idx += 1
         if prs:
-            for pr in prs:
+            # Deduplicate PRs by number or html_url so exactly one unified PR is presented
+            unique_prs = {}
+            for p in prs:
+                num = p.get("number") or p.get("html_url")
+                if num not in unique_prs:
+                    unique_prs[num] = p
+
+            for pr_key, pr in unique_prs.items():
                 pr_num = pr.get("number", "")
                 pr_title = pr.get("title", "")
                 pr_url = pr.get("html_url", "")
                 head_ref = pr.get("head", {}).get("ref", git_branch)
                 author = pr.get("author", github_username)
-                cwe = pr.get("cwe", "")
-                fpath = pr.get("file_path", "")
-                diff = pr.get("diff", "")
                 checklist = pr.get("review_checklist", [])
 
                 st.markdown(f"""
                 <div class="pr-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                         <div>
-                            <span class="pr-number">PR #{pr_num}</span>
-                            <span style="margin-left:8px; color:#e5e7eb; font-weight:600;">{pr_title[:80]}</span>
+                            <span class="pr-number">Pull Request #{pr_num}</span>
+                            <span style="margin-left:8px; color:#e5e7eb; font-weight:600;">{pr_title}</span>
                         </div>
-                        <span class="badge badge-demo">🟡 Pending Review</span>
+                        <span class="badge badge-demo">🟡 Pending Senior Review</span>
                     </div>
-                    <div style="display:flex; gap:24px; font-size:13px; color:#9ca3af;">
+                    <div style="display:flex; gap:24px; font-size:13px; color:#9ca3af; margin-bottom:12px;">
+                        <span>Target: <code>{effective_owner}/{effective_repo}</code></span>
                         <span>Branch: <code>{head_ref}</code> → <code>main</code></span>
-                        <span>Author: <code>@{author}</code></span>
-                        <span>Commit: <code>{commit_sha[:8] if commit_sha else '—'}</code></span>
-                        {'<span>Defect: <code>' + cwe + '</code></span>' if cwe else ''}
+                        <span>Committed by: <code>@{author}</code></span>
+                        <span>Commit: <code>{commit_sha[:8] if commit_sha else 'HEAD'}</code></span>
+                        <span>Defects Fixed: <code>{len(patches)}</code></span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Files changed
-                if fpath:
-                    st.markdown(f"**Files Changed:** `{fpath}`")
-
-                # Link
                 if pr_url:
-                    st.markdown(f"🔗 **[Open Pull Request]({pr_url})**")
+                    st.link_button(f"🔗 View & Review Pull Request #{pr_num} on GitHub", pr_url, type="primary", use_container_width=True)
+
+                # Defects resolved breakdown
+                if patches:
+                    st.markdown("#### 🛠️ Defect Fixes & Diff Details")
+                    for patch_idx, p in enumerate(patches, 1):
+                        with st.expander(f"Defect #{p.get('github_issue_number', patch_idx)}: {p.get('cwe', 'Defect')} in `{p.get('file_path')}` (line {p.get('lineno', 1)})", expanded=True):
+                            st.markdown(f"**Root Cause & Fix:** {p.get('explanation', '')}")
+                            if p.get("diff"):
+                                st.code(p["diff"], language="diff")
 
                 # Checklist
                 if checklist:
-                    with st.expander("Review Checklist", expanded=False):
+                    with st.expander("Senior Engineer Sign-Off Checklist", expanded=False):
                         for c_idx, item in enumerate(checklist):
                             st.checkbox(item, value=True, key=f"pr_check_{pr_num}_{c_idx}")
 
                 # Approval buttons
                 approve_col, reject_col = st.columns([1, 1])
                 with approve_col:
-                    if st.button(f"✅ Approve & Merge PR #{pr_num}", key=f"approve_{pr_num}", use_container_width=True):
-                        st.success(f"PR #{pr_num} approved and merged by @{github_username}.")
+                    if st.button(f"✅ Senior Engineer Approve & Merge PR #{pr_num}", key=f"approve_{pr_num}", use_container_width=True):
+                        st.success(f"Pull Request #{pr_num} approved and merged by Senior Engineer @{github_username}.")
                 with reject_col:
                     if st.button(f"🔙 Request Changes PR #{pr_num}", key=f"reject_{pr_num}", use_container_width=True):
                         st.info(f"Changes requested on PR #{pr_num}.")
@@ -890,12 +899,12 @@ if actionable:
         table_data.append({
             "Issue": f"#{item['number']}",
             "Severity": item["severity"],
+            "Defect Class": item.get("cwe", "—"),
+            "Target File": item.get("file_path", "—"),
             "Patch": has_patch,
             "Tests": t_gate,
             "Branch": git_branch or "—",
             "Commit": commit_sha[:7] if commit_sha else "—",
-            "PR": pr_str,
-            "Jira": jira_key,
-            "Slack": slack_ok,
+            "Pull Request": pr_str,
         })
     st.table(table_data)
