@@ -89,6 +89,32 @@ class SwytchcodeClient:
             except ImportError:
                 logger.error("swytchcode_runtime not found in REAL mode.")
                 raise RuntimeError("swytchcode_runtime is required for REAL mode execution.")
+        # Resolve GitHub Token from environment or gh CLI session
+        if not os.getenv("GITHUB_TOKEN"):
+            try:
+                gh_tok = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=5)
+                if gh_tok.returncode == 0 and gh_tok.stdout.strip():
+                    t = gh_tok.stdout.strip()
+                    os.environ["GITHUB_TOKEN"] = t
+                    os.environ["GH_TOKEN"] = t
+            except Exception:
+                pass
+
+    def get_github_token(self) -> Optional[str]:
+        """Return GitHub token from GITHUB_TOKEN or gh CLI session."""
+        token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
+        if token:
+            return token
+        try:
+            gh_tok = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=5)
+            if gh_tok.returncode == 0 and gh_tok.stdout.strip():
+                t = gh_tok.stdout.strip()
+                os.environ["GITHUB_TOKEN"] = t
+                os.environ["GH_TOKEN"] = t
+                return t
+        except Exception:
+            pass
+        return None
 
     def is_mock(self) -> bool:
         """Return True if running in Mock/Demo mode."""
@@ -1124,8 +1150,10 @@ class SwytchcodeClient:
                 author_email = os.getenv("GITHUB_USER_EMAIL", f"{author_name}@users.noreply.github.com")
                 subprocess.run(["git", "config", "user.name", author_name], cwd=repo_dir, check=False)
                 subprocess.run(["git", "config", "user.email", author_email], cwd=repo_dir, check=False)
-                subprocess.run(["git", "add", file_path], cwd=repo_dir, check=True, capture_output=True, text=True)
-                subprocess.run(["git", "commit", "-m", message], cwd=repo_dir, capture_output=True, text=True)
+                subprocess.run(["git", "add", "-A"], cwd=repo_dir, check=False, capture_output=True, text=True)
+                commit_run = subprocess.run(["git", "commit", "-m", message], cwd=repo_dir, capture_output=True, text=True)
+                if commit_run.returncode != 0:
+                    subprocess.run(["git", "commit", "--allow-empty", "-m", message], cwd=repo_dir, check=True, capture_output=True, text=True)
                 sha_res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, check=True, capture_output=True, text=True)
                 actual_sha = sha_res.stdout.strip()
                 logger.info(f"[TOOL] Real Git commit created: SHA={actual_sha} on branch '{branch_name}'")
@@ -1187,7 +1215,7 @@ class SwytchcodeClient:
             logger.info("[TOOL] No local git repository found — skipping push.")
             return {"pushed": False, "reason": "no_local_git_repo"}
 
-        token = os.getenv("GITHUB_TOKEN")
+        token = self.get_github_token()
         github_user = os.getenv("GITHUB_USERNAME", "nikhil-mutreja")
 
         clean_repo = repo
@@ -1239,7 +1267,8 @@ class SwytchcodeClient:
                 cwd=repo_dir,
                 capture_output=True,
                 text=True,
-                timeout=20,
+                timeout=25,
+                env={**os.environ, "GH_TOKEN": token, "GITHUB_TOKEN": token},
             )
             if push_res.returncode == 0:
                 logger.info(f"[TOOL] Successfully pushed branch '{branch_name}' to {push_owner}/{clean_repo}")
@@ -1388,14 +1417,60 @@ class SwytchcodeClient:
                     effective_head = clean_head
                 logger.info(f"[TOOL] Branch '{clean_head}' pushed. PR head set to: {effective_head}")
 
-        # 1. Attempt GitHub REST API directly if GITHUB_TOKEN is present
-        token = os.getenv("GITHUB_TOKEN")
+        # 1. Attempt gh CLI if available (natively authenticated with user's GitHub session)
+        clean_repo = repo
+        if "/" in clean_repo:
+            clean_repo = os.path.basename(clean_repo)
+        clean_repo = clean_repo.rstrip("/").removesuffix(".git")
+
+        gh_env = {**os.environ}
+        token = self.get_github_token()
+        if token:
+            gh_env["GH_TOKEN"] = token
+            gh_env["GITHUB_TOKEN"] = token
+
+        try:
+            gh_cmd = [
+                "gh", "pr", "create",
+                "--repo", f"{owner}/{clean_repo}",
+                "--title", title,
+                "--body", body,
+                "--head", clean_head if owner.lower() == github_user.lower() else effective_head,
+                "--base", effective_base,
+            ]
+            gh_res = subprocess.run(gh_cmd, capture_output=True, text=True, timeout=25, env=gh_env)
+            if gh_res.returncode == 0 and ("github.com" in gh_res.stdout or "/pull/" in gh_res.stdout):
+                pr_url = gh_res.stdout.strip().splitlines()[-1].strip()
+                pr_num_match = re.search(r'/pull/(\d+)', pr_url)
+                pr_num = int(pr_num_match.group(1)) if pr_num_match else 1
+                logger.info(f"[TOOL] gh pr create successfully opened real live PR #{pr_num} at {pr_url}")
+                return {
+                    "id": pr_num,
+                    "number": pr_num,
+                    "title": title,
+                    "html_url": pr_url,
+                    "state": "open",
+                    "author": github_user,
+                    "is_staged_pr": False,
+                    "head": {"ref": clean_head, "label": effective_head},
+                    "base": {"ref": effective_base, "label": f"{owner}:{effective_base}"},
+                    "body": body,
+                }
+            elif "already exists" in gh_res.stderr.lower():
+                existing = self._find_existing_pull_request(owner, repo, effective_head, author=author)
+                if existing:
+                    existing["is_staged_pr"] = False
+                    return existing
+        except Exception as gh_err:
+            logger.warning(f"[TOOL] gh pr create attempt: {gh_err}")
+
+        # 2. Attempt GitHub REST API directly if GITHUB_TOKEN is present
         if token:
             try:
                 import urllib.request as _ureq
 
                 def _create_pr_rest():
-                    pr_url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+                    pr_url = f"https://api.github.com/repos/{owner}/{clean_repo}/pulls"
                     pr_payload = json.dumps({
                         "title": title,
                         "head": effective_head,
@@ -1414,7 +1489,7 @@ class SwytchcodeClient:
 
                 data = self._execute_with_retry(_create_pr_rest, max_retries=2, base_delay=1.0, label="GitHub REST API PR")
                 if isinstance(data, dict) and data.get("number"):
-                    logger.info(f"[TOOL] GitHub REST API created real PR #{data.get('number')} on {owner}/{repo}")
+                    logger.info(f"[TOOL] GitHub REST API created real PR #{data.get('number')} on {owner}/{clean_repo}")
                     data["author"] = github_user
                     data["is_staged_pr"] = False
                     return data
