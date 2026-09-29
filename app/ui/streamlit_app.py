@@ -300,6 +300,17 @@ with st.sidebar:
     repo_name_default = os.getenv("GITHUB_REPO_NAME", "Skill-Swap-Platform")
 
     st.markdown("---")
+    st.markdown("##### GitHub Authentication")
+    user_gh_token = st.text_input(
+        "GitHub Personal Access Token (PAT)",
+        type="password",
+        value=os.getenv("GITHUB_TOKEN", ""),
+        help="Optional: Enter your GitHub token (with 'repo' scope) to auto-push branches and open live PRs directly on GitHub. Without a token, DevPilot provides a 1-click GitHub submission link.",
+    )
+    if user_gh_token:
+        os.environ["GITHUB_TOKEN"] = user_gh_token.strip()
+
+    st.markdown("---")
     st.markdown("##### GitHub & Swytchcode Tools")
     st.caption("""
     `github.issue.get1` · `github.content.get`
@@ -745,21 +756,25 @@ with col_details:
                     unique_prs[num] = p
 
             for pr_key, pr in unique_prs.items():
-                pr_num = pr.get("number", "")
+                pr_num = pr.get("number")
                 pr_title = pr.get("title", "")
                 pr_url = pr.get("html_url", "")
                 head_ref = pr.get("head", {}).get("ref", git_branch)
                 author = pr.get("author", github_username)
                 checklist = pr.get("review_checklist", [])
+                is_staged = pr.get("is_staged_pr", False) or not pr_num
+
+                pr_badge = '<span class="badge badge-demo">🟡 Ready to Submit on GitHub</span>' if is_staged else '<span class="badge badge-live">🟢 Live on GitHub</span>'
+                pr_label = "Pull Request (Ready to Submit)" if is_staged else f"Pull Request #{pr_num}"
 
                 st.markdown(f"""
                 <div class="pr-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                         <div>
-                            <span class="pr-number">Pull Request #{pr_num}</span>
+                            <span class="pr-number">{pr_label}</span>
                             <span style="margin-left:8px; color:#e5e7eb; font-weight:600;">{pr_title}</span>
                         </div>
-                        <span class="badge badge-demo">🟡 Pending Senior Review</span>
+                        {pr_badge}
                     </div>
                     <div style="display:flex; gap:24px; font-size:13px; color:#9ca3af; margin-bottom:12px;">
                         <span>Target: <code>{effective_owner}/{effective_repo}</code></span>
@@ -771,11 +786,13 @@ with col_details:
                 </div>
                 """, unsafe_allow_html=True)
 
-                if pr.get("remote_notice"):
-                    st.info(f"ℹ️ **Status:** Verified locally on branch `{head_ref}`. Click below to submit/review directly on GitHub.")
-
-                if pr_url:
-                    st.link_button(f"🔗 View & Review Pull Request #{pr_num} on GitHub", pr_url, type="primary", use_container_width=True)
+                if is_staged:
+                    st.warning("⚠️ **Live GitHub PR not yet submitted**: Local branch and commits were created. Click the button below to review and open this Pull Request on GitHub in 1 click, or enter your GitHub Token in the sidebar to auto-publish.")
+                    if pr_url:
+                        st.link_button("🚀 1-Click: Open & Submit Pull Request on GitHub", pr_url, type="primary", use_container_width=True)
+                else:
+                    if pr_url:
+                        st.link_button(f"🔗 View & Review Pull Request #{pr_num} on GitHub", pr_url, type="primary", use_container_width=True)
 
                 # Defects resolved breakdown
                 if patches:
@@ -909,7 +926,13 @@ if actionable:
     for item in actionable:
         has_patch = "✅" if any(p["github_issue_number"] == item["number"] for p in patches) else "—"
         pr_num = item.get("pull_request_number")
-        pr_str = f"PR #{pr_num}" if pr_num else ("⚠️ Failed" if pr_error else "—")
+        has_staged = any(p.get("is_staged_pr") for p in prs)
+        if pr_num and not has_staged:
+            pr_str = f"PR #{pr_num} (Live)"
+        elif has_staged or (prs and not pr_num):
+            pr_str = "Ready to Open 🚀"
+        else:
+            pr_str = ("⚠️ Failed" if pr_error else "—")
         t_gate = "✅" if test_res.get("passed") else ("❌" if "FAILED" in test_res.get("status", "") else "—")
         jira_key = item.get("jira_ticket_key") or "—"
         slack_ok = "✅" if any(s.get("ok", False) or s.get("delivered", False) for s in slack_res) else ("⚠️" if slack_res else "—")

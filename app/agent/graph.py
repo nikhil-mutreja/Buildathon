@@ -642,14 +642,29 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
             pr_res["author"] = github_user
             pr_res["body"] = pr_body
             pr_res["patches"] = patches
+            is_staged = pr_res.get("is_staged_pr", False)
+            pr_res["review_checklist"] = checklist_items
+            pr_res["cwe"] = patches[0].get("cwe")
+            pr_res["lineno"] = patches[0].get("lineno", 1)
+            pr_res["snippet"] = patches[0].get("snippet")
+            pr_res["explanation"] = patches[0].get("explanation")
+            pr_res["diff"] = diffs_md
+            pr_res["file_path"] = patches[0]["file_path"]
+            pr_res["author"] = github_user
+            pr_res["body"] = pr_body
+            pr_res["patches"] = patches
             pr_res["files_changed"] = [p["file_path"] for p in patches]
             pull_requests.append(pr_res)
 
             for issue in actionable:
                 issue["pull_request_number"] = pr_num
 
-            decisions.append(f"Pull request #{pr_num} opened by @{github_user} on branch `{branch_name}` for Senior Engineer review.")
-            actions.append(f"Created GitHub Pull Request #{pr_num} by @{github_user}: '{pr_title}'.")
+            if pr_num and not is_staged:
+                decisions.append(f"Live Pull Request #{pr_num} opened on GitHub by @{github_user} on branch `{branch_name}` for Senior Engineer review.")
+                actions.append(f"Created real GitHub Pull Request #{pr_num} by @{github_user}: '{pr_title}'.")
+            else:
+                decisions.append(f"Pull Request prepared on branch `{branch_name}` for Senior Engineer review. Ready to submit on GitHub: {pr_res.get('html_url')}")
+                actions.append(f"Prepared Pull Request by @{github_user}: '{pr_title}' (Ready for 1-click GitHub submission: {pr_res.get('html_url')})")
         except Exception as e:
             pr_error = str(e)
             logger.warning(f"Remote GitHub Pull Request creation could not be completed: {pr_error}")
@@ -666,14 +681,13 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
                 or repo in ("real_test_repo", "auth_microservice", "ecommerce_service", "realtime_stream_service")
             )
             if not is_controlled:
-                pr_num = actionable[0].get("number", 101) if actionable else 101
                 fallback_pr = {
-                    "id": 90000 + pr_num,
-                    "number": pr_num,
+                    "id": None,
+                    "number": None,
                     "title": pr_title,
                     "html_url": compare_url,
                     "compare_url": compare_url,
-                    "state": "open",
+                    "state": "pending_submission",
                     "review_checklist": checklist_items,
                     "cwe": patches[0].get("cwe") if patches else "CWE-DEFECT",
                     "lineno": patches[0].get("lineno", 1) if patches else 1,
@@ -691,9 +705,7 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
                     "remote_notice": pr_error,
                 }
                 pull_requests.append(fallback_pr)
-                for issue in actionable:
-                    issue["pull_request_number"] = pr_num
-                actions.append(f"Staged Pull Request #{pr_num} by @{github_user} with 1-click submission: {compare_url}")
+                actions.append(f"Prepared Pull Request by @{github_user} with 1-click submission: {compare_url}")
     else:
         # MOCK MODE: Provide per-patch PR items for unit test backwards-compatibility
         for patch in patches:

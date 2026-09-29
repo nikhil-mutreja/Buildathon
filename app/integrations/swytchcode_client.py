@@ -1226,11 +1226,13 @@ class SwytchcodeClient:
         remote_name = "origin" if is_own_repo else "fork"
 
         try:
-            if not is_own_repo:
-                subprocess.run(["git", "remote", "remove", remote_name], cwd=repo_dir, capture_output=True, text=True)
-                subprocess.run(["git", "remote", "add", remote_name, push_url], cwd=repo_dir, capture_output=True, text=True)
-            else:
-                subprocess.run(["git", "remote", "set-url", remote_name, push_url], cwd=repo_dir, capture_output=True, text=True)
+            subprocess.run(["git", "remote", "remove", remote_name], cwd=repo_dir, capture_output=True, text=True)
+            subprocess.run(["git", "remote", "add", remote_name, push_url], cwd=repo_dir, capture_output=True, text=True)
+
+            author_name = github_user
+            author_email = os.getenv("GITHUB_USER_EMAIL", f"{author_name}@users.noreply.github.com")
+            subprocess.run(["git", "config", "user.name", author_name], cwd=repo_dir, check=False)
+            subprocess.run(["git", "config", "user.email", author_email], cwd=repo_dir, check=False)
 
             push_res = subprocess.run(
                 ["git", "push", "-u", remote_name, branch_name, "--force"],
@@ -1414,6 +1416,7 @@ class SwytchcodeClient:
                 if isinstance(data, dict) and data.get("number"):
                     logger.info(f"[TOOL] GitHub REST API created real PR #{data.get('number')} on {owner}/{repo}")
                     data["author"] = github_user
+                    data["is_staged_pr"] = False
                     return data
             except Exception as api_pr_err:
                 logger.warning(f"[TOOL] Direct GitHub REST API PR creation error: {api_pr_err}")
@@ -1462,6 +1465,7 @@ class SwytchcodeClient:
                     if pr_state:
                         result["state"] = pr_state
                 result["author"] = github_user
+                result["is_staged_pr"] = False
                 logger.info(f"[TOOL] GitHub PR created via Swytchcode: #{result.get('number', 'OK')}")
                 return result
         except Exception as e:
@@ -1473,6 +1477,7 @@ class SwytchcodeClient:
         if existing:
             logger.info(f"[TOOL] Reusing existing Pull Request #{existing.get('number')} for branch {effective_head}")
             existing["author"] = github_user
+            existing["is_staged_pr"] = False
             return existing
 
         detail = err_msg if 'err_msg' in locals() and err_msg else "missing credentials for GitHub or remote rejected PR"
@@ -1495,22 +1500,21 @@ class SwytchcodeClient:
             clean_repo = clean_repo[:-4]
 
         compare_url = f"https://github.com/{owner}/{clean_repo}/compare/{effective_base}...{effective_head}?expand=1"
-        pr_seq = int(time.time() % 10000) or 101
-        logger.info(f"[TOOL] Pull Request #{pr_seq} staged with direct submission link: {compare_url}")
+        logger.info(f"[TOOL] Pull Request staged with direct submission link: {compare_url}")
         return {
-            "id": 90000 + pr_seq,
-            "number": pr_seq,
+            "id": None,
+            "number": None,
             "title": title,
             "html_url": compare_url,
             "compare_url": compare_url,
-            "state": "open",
+            "state": "pending_submission",
             "user": {"login": github_user, "html_url": f"https://github.com/{github_user}"},
             "head": {"ref": clean_head, "label": effective_head},
             "base": {"ref": effective_base, "label": f"{owner}:{effective_base}"},
             "body": body,
             "author": github_user,
             "is_staged_pr": True,
-            "remote_notice": f"Remote GitHub API notice: {detail}",
+            "remote_notice": f"GitHub Token missing or remote API notice: {detail}",
         }
 
     def _find_existing_pull_request(self, owner: str, repo: str, head: str, author: Optional[str] = None) -> Optional[dict[str, Any]]:

@@ -591,12 +591,11 @@ def test_real_mode_pull_request_resilience_on_network_timeout():
     # Verify Pull Request is successfully created despite remote network timeout
     assert len(state["pull_requests"]) >= 1
     pr = state["pull_requests"][0]
-    assert pr["number"] > 0
+    assert pr.get("html_url") is not None
     assert "rust-lang/rus" in pr["html_url"] or "compare" in pr["html_url"]
     assert pr["author"] == "nikhil-mutreja"
     assert len(pr["review_checklist"]) >= 4
-    # Actionable issues must have PR number linked
-    assert all(issue.get("pull_request_number") is not None for issue in state["actionable_issues"])
+    assert pr.get("is_staged_pr") is True
 
 
 
