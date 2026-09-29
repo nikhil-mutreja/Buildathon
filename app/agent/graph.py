@@ -612,7 +612,9 @@ def create_pull_request_node(state: DevPilotState) -> dict[str, Any]:
             err_reason = ""
             if isinstance(pr_res, dict):
                 inner_data = pr_res.get("data", {})
-                if isinstance(inner_data, dict) and inner_data.get("status") in ("404", "403", "422", 404, 403, 422):
+                if pr_res.get("is_staged_pr"):
+                    is_error = False
+                elif isinstance(inner_data, dict) and inner_data.get("status") in ("404", "403", "422", 404, 403, 422):
                     is_error = True
                     err_reason = inner_data.get("message", "GitHub API error")
                 elif "error" in pr_res:

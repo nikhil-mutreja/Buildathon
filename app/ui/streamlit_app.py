@@ -612,7 +612,11 @@ with col_timeline:
     # Step 9: PR
     if prs:
         for pr in prs:
-            timeline_steps.append(("done", f"PR #{pr.get('number')} opened", pr.get("title", "")[:60]))
+            pr_num = pr.get("number")
+            if pr_num and not pr.get("is_staged_pr"):
+                timeline_steps.append(("done", f"PR #{pr_num} opened", pr.get("title", "")[:60]))
+            else:
+                timeline_steps.append(("done", "PR Ready to Submit", pr.get("title", "")[:60]))
     elif pr_error:
         timeline_steps.append(("failed", "PR creation failed", pr_error[:60]))
 
