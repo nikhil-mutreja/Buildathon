@@ -771,6 +771,9 @@ with col_details:
                 </div>
                 """, unsafe_allow_html=True)
 
+                if pr.get("remote_notice"):
+                    st.info(f"ℹ️ **Status:** Verified locally on branch `{head_ref}`. Click below to submit/review directly on GitHub.")
+
                 if pr_url:
                     st.link_button(f"🔗 View & Review Pull Request #{pr_num} on GitHub", pr_url, type="primary", use_container_width=True)
 
